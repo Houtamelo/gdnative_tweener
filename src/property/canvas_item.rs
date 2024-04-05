@@ -63,30 +63,30 @@ mod tests {
 	use super::*;
 
 	unsafe fn test(node_direct: &Sprite, node_ref: Ref<CanvasItem>, node_tref: TRef<Particles2D>) -> Result<()> {
-		node_direct.do_color_r(0., 1., 5.)?;
-		node_ref.do_color_r(0., 1., 5.)?;
-		node_tref.do_color_r(0., 1., 5.)?;
+		node_direct.do_color_r( 1., 5.)?;
+		node_ref.do_color_r(1., 5.)?;
+		node_tref.do_color_r(1., 5.)?;
 
-		node_direct.do_color_g(0., 1., 5.)?;
-		node_ref.do_color_g(0., 1., 5.)?;
-		node_tref.do_color_g(0., 1., 5.)?;
+		node_direct.do_color_g(1., 5.)?;
+		node_ref.do_color_g(1., 5.)?;
+		node_tref.do_color_g(1., 5.)?;
 
-		node_direct.do_color_b(0., 1., 5.)?;
-		node_ref.do_color_b(0., 1., 5.)?;
-		node_tref.do_color_b(0., 1., 5.)?;
+		node_direct.do_color_b(1., 5.)?;
+		node_ref.do_color_b(1., 5.)?;
+		node_tref.do_color_b(1., 5.)?;
 
-		node_direct.do_color_a(0., 1., 5.)?;
-		node_ref.do_color_a(0., 1., 5.)?;
-		node_tref.do_color_a(0., 1., 5.)?;
+		node_direct.do_color_a( 1., 5.)?;
+		node_ref.do_color_a(1., 5.)?;
+		node_tref.do_color_a(1., 5.)?;
 
-		node_direct.do_fade(0., 1., 5.)?;
-		node_ref.do_fade(0., 1., 5.)?;
-		node_tref.do_fade(0., 1., 5.)?;
+		node_direct.do_fade(1., 5.)?;
+		node_ref.do_fade(1., 5.)?;
+		node_tref.do_fade(1., 5.)?;
 
 		let color = Color::from_rgb(1., 1., 1.);
-		node_direct.do_color(color, color, 5.)?;
-		node_ref.do_color(color, color, 5.)?;
-		node_tref.do_color(color, color, 5.)?;
+		node_direct.do_color(color, 5.)?;
+		node_ref.do_color(color, 5.)?;
+		node_tref.do_color(color, 5.)?;
 		
 		Ok(())
 	}

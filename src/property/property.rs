@@ -6,7 +6,6 @@ pub trait DoProperty<Val: _Lerp + FromVariant + ToVariant>: Sized {
 
 	fn do_property(&self,
 	               property: impl Into<String>,
-	               start_val: Val,
 	               end_val: Val,
 	               duration: f64)
 	               -> Result<Self::Tween>;
@@ -19,13 +18,21 @@ macro_rules! do_property_impl {
 		
 			fn do_property(&self,
 			               property: impl Into<String>,
-			               start_val: $val,
 			               end_val: $val,
 			               duration: f64)
 			               -> Result<Self::Tween> {
-				let mut tween = <$tween>::new(property, self, start_val, end_val, duration, AutoPlay(true));
+				let property = property.into();
+				
 				let obj_ref = unsafe { self.base() };
 				let obj = unsafe { obj_ref.assume_safe() };
+				let variant = obj.get(&property);
+				let start_val = 
+					variant.to::<$val>()
+						   .ok_or_else(|| anyhow!(
+								"Object `{obj:?}` returned invalid value for property {property}\n\
+								 Value: {variant:?}"))?;
+				
+				let mut tween = <$tween>::new(property, self, start_val, end_val, duration, AutoPlay(true));
 				
 				if let Some(node) = obj.cast::<Node>() {
 					tween.bound_to(&node);
@@ -48,7 +55,6 @@ pub trait DoPropertyVariant {
 	fn do_property_var<Val: _Lerp + FromVariant + ToVariant + Clone + Copy>(
 		&self,
 		property: impl Into<String>,
-		start_val: Val,
 		end_val: Val,
 		duration: f64)
 		-> Result<TweenProperty_Variant>;
@@ -57,8 +63,7 @@ pub trait DoPropertyVariant {
 impl<T: Inherits<Object>> DoPropertyVariant for T  {
 	fn do_property_var<Val: _Lerp + FromVariant + ToVariant + Clone + Copy>(
 		&self,
-		property: impl Into<String>, 
-		start_val: Val,
+		property: impl Into<String>,
 		end_val: Val, 
 		duration: f64)
 		-> Result<TweenProperty_Variant> {
@@ -74,12 +79,21 @@ impl<T: Inherits<Object>> DoPropertyVariant for T  {
 			let next_calc = next_calc.to::<Val>().unwrap();
 			Val::add_relative(&value_at_obj, &previous_calc, &next_calc).to_variant()
 		};
+		
+		let property = property.into();
+
+		let obj_ref = unsafe { self.base() };
+		let obj = unsafe { obj_ref.assume_safe() };
+		let variant = obj.get(&property);
+		
+		let start_val = 
+			variant.to::<Val>()
+				   .ok_or_else(|| anyhow!(
+					   "Object `{obj:?}` returned invalid value for property {property}\n\
+					    Value: {variant:?}"))?;
 
 		let mut tween = TweenProperty_Variant::new(
 			property, self, start_val, end_val, duration, AutoPlay(true), lerp_fn, relative_fn);
-		
-		let obj_ref = unsafe { self.base() };
-		let obj = unsafe { obj_ref.assume_safe() };
 
 		if let Some(node) = obj.cast::<Node>() {
 			tween.bound_to(&node);

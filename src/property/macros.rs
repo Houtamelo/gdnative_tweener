@@ -54,12 +54,12 @@ macro_rules! do_full_trait {
 	    tween: $tween: ty  $(,)?
     }) => {
 	    pub trait $trait_ty {
-			fn $fn_name(self, start_val: $val, end_val: $val, duration: f64) -> Result<$tween>;
+			fn $fn_name(self, end_val: $val, duration: f64) -> Result<$tween>;
 		}
 		
 		impl<TSelf> $trait_ty for TSelf where TSelf: Inherits<$sub_ty> + Inherits<Object> {
-			fn $fn_name(self, start_val: $val, end_val: $val, duration: f64) -> Result<$tween> {
-				self.do_property($property, start_val, end_val, duration)
+			fn $fn_name(self, end_val: $val, duration: f64) -> Result<$tween> {
+				self.do_property($property, end_val, duration)
 			}
 		}
     };
@@ -70,12 +70,12 @@ macro_rules! do_full_trait {
 		tween: $tween: ty  $(,)?
     }) => {
 	    pub trait $trait_ty {
-			fn $fn_name(self, start_val: impl Into<$val>, end_val: impl Into<$val>, duration: f64) -> Result<$tween>;
+			fn $fn_name(self, end_val: impl Into<$val>, duration: f64) -> Result<$tween>;
 		}
 		
 		impl<TSelf> $trait_ty for TSelf where TSelf: Inherits<$sub_ty> + Inherits<Object> {
-			fn $fn_name(self, start_val: impl Into<$val>, end_val: impl Into<$val>, duration: f64) -> Result<$tween> {
-				self.do_property($property, start_val.into(), end_val.into(), duration)
+			fn $fn_name(self, end_val: impl Into<$val>, duration: f64) -> Result<$tween> {
+				self.do_property($property, end_val.into(), duration)
 			}
 		}
     };
