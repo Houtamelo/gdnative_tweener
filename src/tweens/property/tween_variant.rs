@@ -93,7 +93,7 @@ impl TweenProperty_Variant {
 		let Some(target) = (unsafe { self.target.assume_safe_if_sane() }) 
 			else { bail!("Can not set property `{}` on Object, target is not sane.", self.property.as_str()) };
 		
-		let value_at_obj = target.get(self.property.as_str());
+		let value_at_obj = target.get_indexed(self.property.as_str());
 		
 		let percent = self.ease.sample(t);
 		let next_value = (self.lerp_fn)(&self.start, &self.end, percent);
@@ -106,15 +106,15 @@ impl TweenProperty_Variant {
 			};
 		
 		self.previous_value = next_value;
-		
-		match unsafe { self.target.assume_safe_if_sane() } {
+
+		unsafe { match self.target.assume_safe_if_sane() {
 			Some(target) => {
-				target.set_deferred(self.property.as_str(), target_value.to_variant());
+				target.call_deferred("set_indexed", &[self.property.to_variant(), target_value.to_variant()]);
 			}
 			None => {
 				bail!("Can not set property `{}` on Object, target is not sane.", self.property.as_str());
 			}
-		}
+		} }
 		
 		Ok(())
 	}

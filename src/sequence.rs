@@ -208,32 +208,35 @@ impl Tick for Sequence {
 		self.total_elapsed_time += delta_time;
 		self.current_elapsed_time += delta_time;
 		
-		todo!()
-
-		/*
-			loop {
-				
-				for fork in self.mains.iter_mut() {
-					let any_playing = 
-						fork.iter_mut()
-							.any(|tween| {
-								match tween.state() {
-									State::Playing => {
-										let excess = tween.advance_time(delta_time);
-										excess <= 0.
-									}
-									State::Paused => {
-										tween.play();
-										let excess = tween.advance_time(delta_time);
-										excess <= 0.
-									}
-									State::Stopped => false,
-								}
-							})
-				
-			}
+		for (at, tween) in self.inserteds.iter_mut() {
+			//todo!()
 		}
-		*/
+
+		let mut remaining_delta = delta_time;
+		
+		for fork in self.mains.iter_mut() {
+			if remaining_delta <= 0. {
+				break;
+			}
+			
+			remaining_delta =
+				fork.iter_mut()
+				    .map(|tween| {
+					    match tween.state() {
+						    State::Playing => {
+							    tween.advance_time(remaining_delta)
+						    }
+						    State::Paused => {
+							    tween.play();
+							    tween.advance_time(remaining_delta)
+						    }
+						    State::Stopped => remaining_delta,
+					    } 
+				    }).min_by(f64::total_cmp)
+					.unwrap_or(remaining_delta);
+		}
+		
+		remaining_delta
 	}
 
 	fn callbacks_on_finish(&self) -> &[Callback] { &self.do_on_finish }

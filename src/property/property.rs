@@ -25,12 +25,14 @@ macro_rules! do_property_impl {
 				
 				let obj_ref = unsafe { self.base() };
 				let obj = unsafe { obj_ref.assume_safe() };
-				let variant = obj.get(&property);
+				let variant = obj.get_indexed(&property);
 				let start_val = 
-					variant.to::<$val>()
-						   .ok_or_else(|| anyhow!(
-								"Object `{obj:?}` returned invalid value for property {property}\n\
-								 Value: {variant:?}"))?;
+					variant.try_to::<$val>()
+						   .map_err(|err| anyhow!(
+								"Object `{obj:?}` returned invalid value for property `{property}` \n\
+								 Value: `{variant:?}` \n\
+								 Expected: `{}` \n\
+								 Error: {err:?}", type_name::<$val>()))?;
 				
 				let mut tween = <$tween>::new(property, self, start_val, end_val, duration, AutoPlay(true));
 				
@@ -84,13 +86,15 @@ impl<T: Inherits<Object>> DoPropertyVariant for T  {
 
 		let obj_ref = unsafe { self.base() };
 		let obj = unsafe { obj_ref.assume_safe() };
-		let variant = obj.get(&property);
+		let variant = obj.get_indexed(&property);
 		
 		let start_val = 
-			variant.to::<Val>()
-				   .ok_or_else(|| anyhow!(
-					   "Object `{obj:?}` returned invalid value for property {property}\n\
-					    Value: {variant:?}"))?;
+			variant.try_to::<Val>()
+				   .map_err(|err| anyhow!(
+					   "Object `{obj:?}` returned invalid value for property `{property}` \n\
+					    Value: `{variant:?}` \n\
+						Expected: `{}` \n\
+					    Error: {err:?}", type_name::<Val>()))?;
 
 		let mut tween = TweenProperty_Variant::new(
 			property, self, start_val, end_val, duration, AutoPlay(true), lerp_fn, relative_fn);

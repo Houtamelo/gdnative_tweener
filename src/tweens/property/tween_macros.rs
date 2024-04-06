@@ -110,7 +110,7 @@ macro_rules! property_impl {
 		}
 	    
 	    impl $struct_ty {
-			pub fn property(&self) -> Rc<String> { self.property.clone() }
+			pub fn property(&self) -> Rc<String> { Rc::clone(&self.property) }
 			
 			pub fn as_relative(&mut self) -> &mut Self { 
 				self.relative = true;
@@ -133,12 +133,12 @@ macro_rules! property_impl {
 					    .ok_or_else(|| anyhow!("Target is not sane."))?
 				};
 		
-				let variant = target.get(self.property.as_str());
+				let variant = target.get_indexed(self.property.as_str());
 				
 				let current =
 					variant.try_to::<$value_ty>()
 						   .map_err(|err| anyhow!(
-								"Target property `{}` is not of type `{}`, got: {:?}.\n\
+								"Target property `{}` is not of type `{}`, got: `{:?}`. \n\
 								 Error: {}", self.property.as_str(), variant, std::any::type_name::<$value_ty>(), err))?;
 		
 				self.start = current.into();
@@ -151,7 +151,7 @@ macro_rules! property_impl {
 					else { bail!("Can not set property `{}` on Object, target is not sane.", self.property.as_str()) };
 				
 				let value_at_obj =
-					match target.get(self.property.as_str()).try_to::<$value_ty>() {
+					match target.get_indexed(self.property.as_str()).try_to::<$value_ty>() {
 						Ok(value) => { value }
 						Err(err) => {
 							bail!("Can not get property `{}` on Object, target is not of type `{}`.\n\
@@ -171,14 +171,14 @@ macro_rules! property_impl {
 				
 				self.previous_value = next_value;
 				
-				match unsafe { self.target.assume_safe_if_sane() } {
+				unsafe { match self.target.assume_safe_if_sane() {
 					Some(target) => {
-						target.set_deferred(self.property.as_str(), target_value.to_variant());
+						target.call_deferred("set_indexed", &[self.property.to_variant(), target_value.to_variant()]);
 					}
 					None => {
 						bail!("Can not set property `{}` on Object, target is not sane.", self.property.as_str());
 					}
-				}
+				} }
 				
 				Ok(())
 			})?
