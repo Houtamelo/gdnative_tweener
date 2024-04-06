@@ -74,7 +74,7 @@ impl TweenMethod_Variant {
 
 	pub fn register<T: _Lerp + FromVariant + ToVariant + Clone + Copy>(self) -> Result<TweenID<TweenMethod_Variant>> {
 		let singleton =
-			&mut TweensBrain::singleton().try_borrow_mut()?;
+			&mut TweensController::singleton().try_borrow_mut()?;
 
 		let id = singleton.register_tween::<TweenMethod_Variant>(TweenMethod::Variant(self));
 		Ok(id)

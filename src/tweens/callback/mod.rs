@@ -58,7 +58,7 @@ impl TweenCallback {
 
 	pub fn register(self) -> Result<TweenID<TweenCallback>> {
 		let singleton =
-			&mut TweensBrain::singleton().try_borrow_mut()?;
+			&mut TweensController::singleton().try_borrow_mut()?;
 
 		let id = singleton.register_tween::<TweenCallback>(self);
 		Ok(id)

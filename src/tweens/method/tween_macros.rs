@@ -72,7 +72,7 @@ macro_rules! method_register {
 		    
 		    pub fn register(self) -> Result<TweenID<$struct_ty>> {
 				let singleton =
-					&mut TweensBrain::singleton().try_borrow_mut()?;
+					&mut TweensController::singleton().try_borrow_mut()?;
 		
 				let id = singleton.register_tween::<$struct_ty>(TweenMethod::from(self));
 				Ok(id)

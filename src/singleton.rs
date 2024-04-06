@@ -6,9 +6,9 @@ use gdnative::api::node::PauseMode;
 use crate::id::{ID, WeakID};
 
 #[derive(NativeClass)]
-#[user_data(GoodCellData<TweensBrain>)]
+#[user_data(GoodCellData<TweensController>)]
 #[inherit(Node)]
-pub struct TweensBrain {
+pub struct TweensController {
 	tweens: HashMap<ID, AnyTween>,
 	sequences: HashMap<ID, Sequence>,
 }
@@ -16,27 +16,31 @@ pub struct TweensBrain {
 const SINGLETON_NAME: &str = "tweens_controller";
 
 lazy_static! {
-	static ref SINGLETON: Instance<TweensBrain> = unsafe {
-		let object: TRef<'static, Object> =
+	static ref SINGLETON: Instance<TweensController> = unsafe {
+		let node: TRef<'static, Node> =
 			Engine::godot_singleton()
-				.get_singleton(SINGLETON_NAME)
+				.get_main_loop()
+				.expect("MainLoop does not exist")
+				.assume_safe()
+				.cast::<SceneTree>()
+				.expect("MainLoop is not a SceneTree")
+				.root()
+				.expect("SceneTree has no root")
+				.assume_safe()
+				.get_node(SINGLETON_NAME)
 				.expect(format!("Singleton with name `{SINGLETON_NAME}` does not exist").as_str())
 				.assume_safe();
 		
-		let node: TRef<'static, Node> = 
-			object.cast::<Node>()
-				  .expect(format!("Singleton with name `{SINGLETON_NAME}` is not a Node").as_str());
-		
 		node.set_pause_mode(PauseMode::PROCESS.into());
 		
-		node.cast_instance::<TweensBrain>()
+		node.cast_instance::<TweensController>()
 		    .expect(format!("Singleton with name `{SINGLETON_NAME}` is not a TweensController").as_str())
 		    .claim()
 	};
 }
 
 #[methods]
-impl TweensBrain {
+impl TweensController {
 	fn new(_owner: &Node) -> Self {
 		Self {
 			tweens: HashMap::new(),
@@ -48,13 +52,13 @@ impl TweensBrain {
 	unsafe fn _process(&mut self, #[base] owner: &Node, delta_time: f64) {
 		let Some(tree_ref) = owner.get_tree()
 			else {
-				godot_error!("TweensBrain::_process: owner has no SceneTree. Owner name: {}", owner.name());
+				godot_error!("TweensController::_process: owner has no SceneTree. Owner name: {}", owner.name());
 				return;
 			};
 		
 		let Some(tree) = tree_ref.assume_safe_if_sane()
 			else {
-				godot_error!("TweensBrain::_process: owner's SceneTree is not sane. Owner name: {}", owner.name());
+				godot_error!("TweensController::_process: owner's SceneTree is not sane. Owner name: {}", owner.name());
 				return;
 			};
 		
@@ -67,7 +71,7 @@ impl TweensBrain {
 	}
 }
 
-impl TweensBrain {
+impl TweensController {
 	unsafe fn tick_process(&mut self, delta_time: f64, is_tree_paused: bool) {
 		self.tweens
 		    .retain(|_, tween| {
@@ -124,7 +128,7 @@ impl TweensBrain {
 		    });
 	}
 	
-	pub fn singleton() -> &'static GoodCellData<TweensBrain> {
+	pub fn singleton() -> &'static GoodCellData<TweensController> {
 		SINGLETON.script()
 	}
 

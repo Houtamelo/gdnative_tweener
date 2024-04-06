@@ -25,7 +25,7 @@ impl<T: Tick + FromTween> TweenID<T> {
 	pub fn new(id: WeakID) -> Self { Self(id, PhantomData) }
 
 	pub fn is_valid(&self) -> bool {
-		TweensBrain::singleton()
+		TweensController::singleton()
 			.try_borrow()
 			.is_ok()
 	}
@@ -37,7 +37,7 @@ impl<T: Tick + FromTween> TweenID<T> {
 					"Tween with id `{}` no longer exists.", self))?;
 		
 		let brain =
-			&mut TweensBrain::singleton().try_borrow_mut()?;
+			&mut TweensController::singleton().try_borrow_mut()?;
 
 		brain.kill_tween(ID(id));
 		Ok(())
@@ -50,7 +50,7 @@ impl<T: Tick + FromTween> TweenID<T> {
 					"Tween with id `{}` no longer exists.", self))?;
 		
 		let brain =
-			&mut TweensBrain::singleton().try_borrow_mut()?;
+			&mut TweensController::singleton().try_borrow_mut()?;
 
 		unsafe { brain.complete_tween(ID(id)) };
 		Ok(())
@@ -63,7 +63,7 @@ impl<T: Tick + FromTween> TweenID<T> {
 					"Tween with id `{}` no longer exists.", self))?;
 		
 		let brain = 
-			TweensBrain::singleton().try_borrow()?;
+			TweensController::singleton().try_borrow()?;
 
 		let tween =
 			brain.get_tween(ID(id))
@@ -84,7 +84,7 @@ impl<T: Tick + FromTween> TweenID<T> {
 					"Tween with id `{}` no longer exists.", self))?;
 		
 		let brain =
-			&mut TweensBrain::singleton().try_borrow_mut()?;
+			&mut TweensController::singleton().try_borrow_mut()?;
 
 		let tween =
 			brain.get_tween_mut(ID(id))

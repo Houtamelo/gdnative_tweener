@@ -79,7 +79,7 @@ macro_rules! property_register {
 		    
 		    pub fn register(self) -> Result<TweenID<$struct_ty>> {
 				let singleton =
-					&mut TweensBrain::singleton().try_borrow_mut()?;
+					&mut TweensController::singleton().try_borrow_mut()?;
 		
 				let id = singleton.register_tween::<$struct_ty>(TweenProperty::from(self));
 				Ok(id)

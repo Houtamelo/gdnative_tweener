@@ -97,7 +97,7 @@ impl Sequence {
 
 	pub fn register(self) -> Result<SequenceID> {
 		let singleton =
-			&mut TweensBrain::singleton().try_borrow_mut()?;
+			&mut TweensController::singleton().try_borrow_mut()?;
 
 		let id = singleton.register_sequence(self.into());
 		Ok(id)
