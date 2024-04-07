@@ -5,54 +5,46 @@ use crate::*;
 macro_rules! base_impl {
     ($struct_ty: ident) => {
 		impl $struct_ty {
-			pub fn bound_to(&mut self, node: &impl Inherits<Node>) -> &mut Self {
-				self.bound_node = Some(unsafe { node.base() });
-			    self
+			pub fn bound_to(self, node: &impl Inherits<Node>) -> Self {
+				Self { bound_node: Some(unsafe { node.base() }), ..self }
 			}
 		    
-		    pub fn with_delay(&mut self, delay: f64) -> &mut Self { 
-			    self.delay = delay;
-			    self
+		    pub fn with_delay(self, delay: f64) -> Self { 
+			    Self { delay, ..self }
 		    }
 		    
-			pub fn with_speed_scale(&mut self, speed_scale: f64) -> &mut Self  { 
-			    self.speed_scale = speed_scale;
-			    self
+			pub fn with_speed_scale(self, speed_scale: f64) -> Self  { 
+			    Self { speed_scale, ..self }
 		    }
 		    
-		    pub fn with_pause_mode(&mut self, pause_mode: TweenPauseMode) -> &mut Self  { 
-			    self.pause_mode = pause_mode;
-			    self
+		    pub fn with_pause_mode(self, pause_mode: TweenPauseMode) -> Self  { 
+			    Self { pause_mode, ..self }
 		    }
 		    
-			pub fn with_process_mode(&mut self, process_mode: TweenProcessMode) -> &mut Self  { 
-			    self.process_mode = process_mode;
-			    self
+			pub fn with_process_mode(self, process_mode: TweenProcessMode) -> Self  { 
+			    Self { process_mode, ..self }
 		    }
 			
-			pub fn run_once(&mut self) -> &mut Self { 
-				self.loop_mode = LoopMode::Finite(0);
-				self
+			pub fn run_once(self) -> Self { 
+				Self { loop_mode: LoopMode::Finite(0), ..self }
 			}
 			
-			pub fn looped(&mut self, loops: u32) -> &mut Self { 
-				self.loop_mode = LoopMode::Finite(loops);
-				self
+			pub fn looped(self, loops: u32) -> Self { 
+				Self { loop_mode: LoopMode::Finite(loops), ..self }
 			}
 			
-			pub fn infinite(&mut self) -> &mut Self {
-				self.loop_mode = LoopMode::Infinite; 
-				self
+			pub fn infinite(self) -> Self {
+				Self { loop_mode: LoopMode::Infinite, ..self }
 			}
 		    
-		    pub fn when_finished(&mut self, 
-								 method: Rc<String>,
+		    pub fn when_finished(mut self, 
+								 method: impl Into<GodotString>,
 								 target: &impl Inherits<Object>,
 								 args: Vec<Variant>)
-								 -> &mut Self {
+								 -> Self {
 				let callback = Callback {
 					target: unsafe { target.base() }, 
-					method,
+					method: method.into(),
 					args,
 				};
 				
@@ -65,17 +57,15 @@ macro_rules! base_impl {
 			fn state(&self) -> State { self.state }
 			
 			fn play(&mut self) {
-				self.state = State::Playing;
+				self.set_state_internal(State::Playing);
 			}
 		
 			fn pause(&mut self) {
-				self.state = State::Paused;
+				self.set_state_internal(State::Paused);
 			}
 		
 			fn stop(&mut self) {
-				self.state = State::Stopped;
-				self.elapsed_time = 0.0;
-				self.cycle_count = 0;
+				self.set_state_internal(State::Stopped);
 			}
 			
 			fn process_mode(&self) -> TweenProcessMode { self.process_mode }

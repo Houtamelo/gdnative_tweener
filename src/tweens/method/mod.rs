@@ -10,7 +10,7 @@ pub use tween_typed::*;
 pub use tween_variant::*;
 
 #[enum_dispatch(Tick)]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum TweenMethod {
 	i64(TweenMethod_i64),
 	f64(TweenMethod_f64),

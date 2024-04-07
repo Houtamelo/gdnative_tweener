@@ -1,12 +1,13 @@
 #[allow(unused_imports)]
 use crate::*;
+use crate::tweens::property::LerpMode;
 use crate::tweens::tween_base_macro::base_impl;
 use crate::tweens::tween_value_macro::value_impl;
 use crate::tweens::property::tween_macros::property_impl;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TweenProperty_Variant {
-	property: Rc<String>,
+	pub property: GodotString,
 	pub target: Ref<Object>,
 	pub bound_node: Option<Ref<Node>>,
 	pub state: State,
@@ -18,11 +19,10 @@ pub struct TweenProperty_Variant {
 	pub cycle_count: u32,
 	pub pause_mode: TweenPauseMode,
 	pub process_mode: TweenProcessMode,
-	pub loop_mode: LoopMode,
-	pub relative: bool,
+	loop_mode: LoopMode,
 	pub start: Variant,
 	pub end: Variant,
-	pub previous_value: Variant,
+	lerp_mode: LerpMode<Variant>,
 	pub do_on_finish: Vec<Callback>,
 	lerp_fn: fn(from: &Variant, to: &Variant, f64) -> Variant,
 	relative_fn: fn(value_at_obj: &Variant, previous_calc: &Variant, next_calc: &Variant) -> Variant,
@@ -30,7 +30,7 @@ pub struct TweenProperty_Variant {
 
 impl TweenProperty_Variant {
 	pub fn new<T: _Lerp + FromVariant + ToVariant + Clone + Copy>(
-		property: impl Into<String>,
+		property: impl Into<GodotString>,
 		target: &impl Inherits<Object>,
 		start: T,
 		end: T,
@@ -40,7 +40,7 @@ impl TweenProperty_Variant {
 		relative_fn: fn(value_at_obj: &Variant, previous_calc: &Variant, next_calc: &Variant) -> Variant)
 		-> Self {
 		Self {
-			property: Rc::new(property.into()),
+			property: property.into(),
 			target: unsafe { target.base() },
 			bound_node: None,
 			state: match auto_play.0 {
@@ -56,10 +56,9 @@ impl TweenProperty_Variant {
 			pause_mode: TweenPauseMode::STOP,
 			process_mode: TweenProcessMode::IDLE,
 			loop_mode: LoopMode::Finite(0),
-			relative: false,
+			lerp_mode: LerpMode::Absolute,
 			start: start.to_variant(),
 			end: end.to_variant(),
-			previous_value: start.to_variant(),
 			do_on_finish: Vec::new(),
 			lerp_fn,
 			relative_fn,
@@ -67,7 +66,7 @@ impl TweenProperty_Variant {
 	}
 
 	pub fn new_registered<T: _Lerp + FromVariant + ToVariant + Clone + Copy>(
-		property: impl Into<String>,
+		property: impl Into<GodotString>,
 		target: &impl Inherits<Object>,
 		start: T,
 		end: T,
@@ -88,31 +87,54 @@ impl TweenProperty_Variant {
 		let id = singleton.register_tween::<TweenProperty_Variant>(TweenProperty::Variant(self));
 		Ok(id)
 	}
+
+	pub fn lerp_relative(mut self) -> Self {
+		match self.lerp_mode {
+			| LerpMode::Flexible{..} 
+			| LerpMode::Absolute => {
+				let ratio = self.elapsed_ratio();
+				
+				self.lerp_mode = LerpMode::Relative {
+					previous_value: (self.lerp_fn)(&self.start, &self.end, ratio)
+				};
+			}
+			LerpMode::Relative { .. } => {},
+		};
+
+		self
+	}
 	
 	fn update_value(&mut self, t: f64) -> Result<()> {
 		let Some(target) = (unsafe { self.target.assume_safe_if_sane() }) 
-			else { bail!("Can not set property `{}` on Object, target is not sane.", self.property.as_str()) };
+			else { bail!("Can not set property `{}` on Object, target is not sane.", self.property) };
 		
-		let value_at_obj = target.get_indexed(self.property.as_str());
+		let value_at_obj = target.get_indexed(self.property.new_ref());
 		
-		let percent = self.ease.sample(t);
-		let next_value = (self.lerp_fn)(&self.start, &self.end, percent);
-		
+		let ratio = self.ease.sample(t);
+
 		let target_value =
-			if self.relative {
-				(self.relative_fn)(&value_at_obj, &self.previous_value, &next_value)
-			} else {
-				next_value.clone()
+			match &mut self.lerp_mode {
+				LerpMode::Flexible { starting_ratio } => {
+					let actual_ratio = actual_ratio(*starting_ratio, ratio);
+					(self.lerp_fn)(&self.start, &self.end, actual_ratio)
+				},
+				LerpMode::Relative { previous_value } => {
+					let next_value = (self.lerp_fn)(&self.start, &self.end, ratio);
+					let target_value = (self.relative_fn)(&value_at_obj, &previous_value, &next_value);
+					*previous_value = next_value;
+					target_value
+				},
+				LerpMode::Absolute => {
+					(self.lerp_fn)(&self.start, &self.end, ratio)
+				},
 			};
-		
-		self.previous_value = next_value;
 
 		unsafe { match self.target.assume_safe_if_sane() {
 			Some(target) => {
 				target.call_deferred("set_indexed", &[self.property.to_variant(), target_value.to_variant()]);
 			}
 			None => {
-				bail!("Can not set property `{}` on Object, target is not sane.", self.property.as_str());
+				bail!("Can not set property `{}` on Object, target is not sane.", self.property);
 			}
 		} }
 		

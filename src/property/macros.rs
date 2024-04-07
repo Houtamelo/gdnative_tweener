@@ -3,49 +3,6 @@
 #[allow(unused_imports)]
 use crate::*;
 
-macro_rules! do_trait_def {
-    (pub trait $trait_ty: ident {
-	    fn_name: $fn_name: ident,
-	    val: $val_ty: ty,
-    }) => {
-	    pub trait $trait_ty {
-			fn $fn_name(self, val: $val_ty, duration: f64) -> Result<NodeBoundTween>;
-		}
-    };
-}
-
-macro_rules! do_trait_impl {
-    (impl $trait_ty: ident for $sub_ty: ty {
-	    fn_name: $fn_name: ident,
-	    val: $val_ty: ty,
-	    property: $property: literal,
-    }) => {
-	    impl<T, TSelf> $trait_ty for TSelf
-			where TSelf: DoPropertyDeprecated<Inner = T>,
-			      T: SubClass<$sub_ty> {
-			fn $fn_name(self, val: $val_ty, duration: f64) -> Result<NodeBoundTween> {
-				self.do_property_deprecated($property, val, duration)
-			}
-		}
-    };
-}
-
-macro_rules! do_trait_impl_into_val {
-    (impl $trait_ty: ident for $sub_ty: ty {
-	    fn_name: $fn_name: ident,
-	    val: $val_ty: ty,
-	    property: $property: literal,
-    }) => {
-	    impl<T, TSelf> $trait_ty for TSelf
-			where TSelf: DoPropertyDeprecated<Inner = T>,
-			      T: SubClass<$sub_ty> {
-			fn $fn_name(self, val: $val_ty, duration: f64) -> Result<NodeBoundTween> {
-				self.do_property_deprecated($property, val.into(), duration)
-			}
-		}
-    };
-}
-
 macro_rules! do_full_trait {
     (pub trait $trait_ty: ident : $sub_ty: ty {
 	    fn_name: $fn_name: ident,
@@ -54,11 +11,11 @@ macro_rules! do_full_trait {
 	    tween: $tween: ty  $(,)?
     }) => {
 	    pub trait $trait_ty {
-			fn $fn_name(self, end_val: $val, duration: f64) -> Result<$tween>;
+			fn $fn_name(&self, end_val: $val, duration: f64) -> $tween;
 		}
 		
 		impl<TSelf> $trait_ty for TSelf where TSelf: Inherits<$sub_ty> + Inherits<Object> {
-			fn $fn_name(self, end_val: $val, duration: f64) -> Result<$tween> {
+			fn $fn_name(&self, end_val: $val, duration: f64) -> $tween {
 				self.do_property($property, end_val, duration)
 			}
 		}
@@ -70,11 +27,11 @@ macro_rules! do_full_trait {
 		tween: $tween: ty  $(,)?
     }) => {
 	    pub trait $trait_ty {
-			fn $fn_name(self, end_val: impl Into<$val>, duration: f64) -> Result<$tween>;
+			fn $fn_name(&self, end_val: impl Into<$val>, duration: f64) -> $tween;
 		}
 		
 		impl<TSelf> $trait_ty for TSelf where TSelf: Inherits<$sub_ty> + Inherits<Object> {
-			fn $fn_name(self, end_val: impl Into<$val>, duration: f64) -> Result<$tween> {
+			fn $fn_name(&self, end_val: impl Into<$val>, duration: f64) -> $tween {
 				self.do_property($property, end_val.into(), duration)
 			}
 		}
@@ -82,9 +39,4 @@ macro_rules! do_full_trait {
 }
 
 #[allow(unused)]
-pub(crate) use {
-	do_trait_def,
-	do_trait_impl,
-	do_trait_impl_into_val,
-	do_full_trait,
-};
+pub(crate) use do_full_trait;

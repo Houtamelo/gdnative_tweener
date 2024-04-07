@@ -1,3 +1,4 @@
+use gdnative::core_types::CoerceFromVariant;
 #[allow(unused_imports)]
 use crate::*;
 
@@ -5,10 +6,10 @@ pub trait DoProperty<Val: _Lerp + FromVariant + ToVariant>: Sized {
 	type Tween;
 
 	fn do_property(&self,
-	               property: impl Into<String>,
+	               property: impl Into<GodotString>,
 	               end_val: Val,
 	               duration: f64)
-	               -> Result<Self::Tween>;
+	               -> Self::Tween;
 }
 
 macro_rules! do_property_impl {
@@ -17,30 +18,39 @@ macro_rules! do_property_impl {
 			type Tween = $tween;
 		
 			fn do_property(&self,
-			               property: impl Into<String>,
+			               property: impl Into<GodotString>,
 			               end_val: $val,
 			               duration: f64)
-			               -> Result<Self::Tween> {
+			               -> Self::Tween {
 				let property = property.into();
 				
 				let obj_ref = unsafe { self.base() };
 				let obj = unsafe { obj_ref.assume_safe() };
-				let variant = obj.get_indexed(&property);
-				let start_val = 
+				let variant = obj.get_indexed(property.new_ref());
+				let val_result = 
 					variant.try_to::<$val>()
 						   .map_err(|err| anyhow!(
 								"Object `{obj:?}` returned invalid value for property `{property}` \n\
 								 Value: `{variant:?}` \n\
 								 Expected: `{}` \n\
-								 Error: {err:?}", type_name::<$val>()))?;
+								 Error: {err:?}", type_name::<$val>()));
 				
-				let mut tween = <$tween>::new(property, self, start_val, end_val, duration, AutoPlay(true));
+				let start_val = 
+					match val_result {
+						Err(err) => {
+							godot_error!("Tween will not work properly.\n Error: {err}");
+							variant.coerce_to()
+						}
+						Ok(val) => val,
+					};
+				
+				let tween = <$tween>::new(property, self, start_val, end_val, duration, AutoPlay(true));
 				
 				if let Some(node) = obj.cast::<Node>() {
-					tween.bound_to(&node);
-				} 
-				
-				Ok(tween)
+					tween.bound_to(&node)
+				} else {
+					tween
+				}
 			}
 		}
 	};
@@ -54,21 +64,21 @@ do_property_impl!(Vector2, TweenProperty_Vector2);
 do_property_impl!(Vector3, TweenProperty_Vector3);
 
 pub trait DoPropertyVariant {
-	fn do_property_var<Val: _Lerp + FromVariant + ToVariant + Clone + Copy>(
+	fn do_property_var<Val: _Lerp + FromVariant + ToVariant + Clone + Copy + CoerceFromVariant>(
 		&self,
-		property: impl Into<String>,
+		property: impl Into<GodotString>,
 		end_val: Val,
 		duration: f64)
-		-> Result<TweenProperty_Variant>;
+		-> TweenProperty_Variant;
 }
 
 impl<T: Inherits<Object>> DoPropertyVariant for T  {
-	fn do_property_var<Val: _Lerp + FromVariant + ToVariant + Clone + Copy>(
+	fn do_property_var<Val: _Lerp + FromVariant + ToVariant + Clone + Copy + CoerceFromVariant>(
 		&self,
-		property: impl Into<String>,
+		property: impl Into<GodotString>,
 		end_val: Val, 
 		duration: f64)
-		-> Result<TweenProperty_Variant> {
+		-> TweenProperty_Variant {
 		let lerp_fn = |from: &Variant, to: &Variant, t: f64| -> Variant {
 			let from = from.to::<Val>().unwrap();
 			let to = to.to::<Val>().unwrap();
@@ -86,23 +96,32 @@ impl<T: Inherits<Object>> DoPropertyVariant for T  {
 
 		let obj_ref = unsafe { self.base() };
 		let obj = unsafe { obj_ref.assume_safe() };
-		let variant = obj.get_indexed(&property);
+		let variant = obj.get_indexed(property.new_ref());
 		
-		let start_val = 
+		let val_result = 
 			variant.try_to::<Val>()
 				   .map_err(|err| anyhow!(
 					   "Object `{obj:?}` returned invalid value for property `{property}` \n\
 					    Value: `{variant:?}` \n\
 						Expected: `{}` \n\
-					    Error: {err:?}", type_name::<Val>()))?;
+					    Error: {err:?}", type_name::<Val>()));
+		
+		let start_val = 
+			match val_result {
+				Err(err) => {
+					godot_error!("Tween will not work properly.\n Error: {err}");
+					variant.coerce_to()
+				}
+				Ok(val) => val,
+			};
 
-		let mut tween = TweenProperty_Variant::new(
+		let tween = TweenProperty_Variant::new(
 			property, self, start_val, end_val, duration, AutoPlay(true), lerp_fn, relative_fn);
 
 		if let Some(node) = obj.cast::<Node>() {
-			tween.bound_to(&node);
+			tween.bound_to(&node)
+		} else {
+			tween
 		}
-
-		Ok(tween)
 	}
 }

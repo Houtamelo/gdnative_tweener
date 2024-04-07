@@ -2,9 +2,9 @@
 use crate::*;
 use crate::internal_prelude::tween_base_macro::base_impl;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TweenCallback {
-	pub(crate) callback: Callback,
+	pub callback: Callback,
 	pub bound_node: Option<Ref<Node>>,
 	pub state: State,
 	pub delay: f64,
@@ -18,7 +18,7 @@ pub struct TweenCallback {
 }
 
 impl TweenCallback {
-	pub fn new(method: impl Into<String>,
+	pub fn new(method: impl Into<GodotString>,
 	           target: &impl Inherits<Object>,
 	           args: Vec<Variant>,
 	           delay: f64,
@@ -26,7 +26,7 @@ impl TweenCallback {
 	           -> Self {
 		Self {
 			callback: Callback {
-				method: Rc::new(method.into()),
+				method: method.into(),
 				target: unsafe { target.base() },
 				args,
 			},
@@ -46,7 +46,7 @@ impl TweenCallback {
 		}
 	}
 
-	pub fn new_registered(method: impl Into<String>,
+	pub fn new_registered(method: impl Into<GodotString>,
 	                      target: &impl Inherits<Object>,
 	                      args: Vec<Variant>,
 	                      delay: f64,
@@ -70,8 +70,8 @@ impl TweenCallback {
 }
 
 impl TweenCallback {
+	pub fn method(&self) -> &GodotString { &self.callback.method }
 	pub fn target(&self) -> Ref<Object> { self.callback.target }
-	pub fn method(&self) -> Rc<String> { Rc::clone(&self.callback.method) }
 	pub fn args(&self) -> &[Variant] { &self.callback.args }
 
 	fn check_elapsed_time(&mut self) -> f64 {
@@ -106,6 +106,10 @@ impl TweenCallback {
 		} else {
 			Ok(())
 		}
+	}
+	
+	pub(crate) fn set_state_internal(&mut self, new_state: State) {
+		self.state = new_state;
 	}
 }
 

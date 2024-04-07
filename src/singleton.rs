@@ -96,7 +96,7 @@ impl TweensController {
 				    sequence.tick_process(delta_time);
 			    }
 
-			    match sequence.state() {
+			    match sequence.state {
 				    | State::Playing
 				    | State::Paused => { true }
 				    State::Stopped => { false }
@@ -120,7 +120,7 @@ impl TweensController {
 		    .retain(|_, sequence| {
 			    sequence.tick_physics(delta_time);
 
-			    match sequence.state() {
+			    match sequence.state {
 				    | State::Playing
 				    | State::Paused => { true }
 				    State::Stopped => { false }
@@ -148,12 +148,40 @@ impl TweensController {
 		self.tweens.remove(&id);
 	}
 	
+	pub fn kill_boundeds(&mut self, bound_node: Ref<Node>) {
+		self.tweens
+			.retain(|_, tween| tween.bound_node().is_some_and(|n| n != &bound_node));
+		
+		self.sequences
+			.retain(|_, seq| seq.bound_node.as_ref().is_some_and(|n| n != &bound_node));
+	}
+	
 	pub unsafe fn complete_tween(&mut self, id: ID) {
 		self.tweens
 			.remove(&id)
 			.map(|tween| {
 				tween.force_finish();
 			});
+	}
+	
+	pub unsafe fn complete_boundeds(&mut self, bound_node: Ref<Node>) {
+		self.tweens
+			.extract_if(|_, tween| {
+				if tween.bound_node().is_some_and(|n| n != &bound_node) {
+					false
+				} else {
+					true
+				}
+			}).for_each(|(_, t)| t.force_finish());
+		
+		self.sequences
+			.extract_if(|_, seq| {
+				if seq.bound_node.as_ref().is_some_and(|n| n != &bound_node) {
+					false
+				} else {
+					true
+				}
+			}).for_each(|(_, s)| s.force_finish());
 	}
 	
 	#[allow(unused)]
@@ -176,7 +204,7 @@ impl TweensController {
 		}
 	} 
 	
-	pub(crate) fn register_sequence(&mut self, sequence: Sequence) -> SequenceID {
+	pub fn register_sequence(&mut self, sequence: Sequence) -> SequenceID {
 		loop {
 			let rc = Rc::new(());
 			let id = ID(Rc::clone(&rc));

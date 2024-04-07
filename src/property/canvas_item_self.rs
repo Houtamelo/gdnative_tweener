@@ -64,32 +64,30 @@ mod tests {
 
 	use super::*;
 
-	unsafe fn please_compile(node_direct: &Sprite, node_ref: Ref<CanvasItem>, node_tref: TRef<Particles2D>) -> Result<()> {
-		node_direct.do_self_color_r(0., 1., 5.0)?;
-		node_ref.do_self_color_r(0., 1., 5.0)?;
-		node_tref.do_self_color_r(0., 1., 5.0)?;
+	unsafe fn please_compile(node_direct: &Sprite, node_ref: Ref<CanvasItem>, node_tref: TRef<Particles2D>) {
+		node_direct.do_self_color_r(1., 5.0);
+		node_ref.do_self_color_r(1., 5.0);
+		node_tref.do_self_color_r(1., 5.0);
 
-		node_direct.do_self_color_g(0., 1., 5.0)?;
-		node_ref.do_self_color_g(0., 1., 5.0)?;
-		node_tref.do_self_color_g(0., 1., 5.0)?;
+		node_direct.do_self_color_g(1., 5.0);
+		node_ref.do_self_color_g(1., 5.0);
+		node_tref.do_self_color_g(1., 5.0);
 
-		node_direct.do_self_color_b(0., 1., 5.0)?;
-		node_ref.do_self_color_b(0., 1., 5.0)?;
-		node_tref.do_self_color_b(0., 1., 5.0)?;
+		node_direct.do_self_color_b(1., 5.0);
+		node_ref.do_self_color_b( 1., 5.0);
+		node_tref.do_self_color_b( 1., 5.0);
 
-		node_direct.do_self_color_a(0., 1., 5.0)?;
-		node_ref.do_self_color_a(0., 1., 5.0)?;
-		node_tref.do_self_color_a(0., 1., 5.0)?;
+		node_direct.do_self_color_a(1., 5.0);
+		node_ref.do_self_color_a(1., 5.0);
+		node_tref.do_self_color_a( 1., 5.0);
 
-		node_direct.do_self_fade(0., 1., 5.0)?;
-		node_ref.do_self_fade(0., 1., 5.0)?;
-		node_tref.do_self_fade(0., 1., 5.0)?;
+		node_direct.do_self_fade( 1., 5.0);
+		node_ref.do_self_fade(1., 5.0);
+		node_tref.do_self_fade( 1., 5.0);
 
 		let color = Color::from_rgb(1., 1., 1.);
-		node_direct.do_self_color(color, color, 5.0)?;
-		node_ref.do_self_color(color, color, 5.0)?;
-		node_tref.do_self_color(color, color, 5.0)?;
-
-		Ok(())
+		node_direct.do_self_color(color, 5.0);
+		node_ref.do_self_color(color, 5.0);
+		node_tref.do_self_color(color, 5.0);
 	}
 }

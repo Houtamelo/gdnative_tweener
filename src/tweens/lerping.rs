@@ -12,7 +12,7 @@ impl _Lerp for i64 {
 	}
 
 	fn add_relative(present_at_obj: &Self, previous_calc: &Self, new_calc: &Self) -> Self { 
-		present_at_obj + previous_calc - new_calc
+		present_at_obj + new_calc - previous_calc
 	}
 }
 
@@ -22,7 +22,7 @@ impl _Lerp for f64 {
 	}
 
 	fn add_relative(present_at_obj: &Self, previous_calc: &Self, new_calc: &Self) -> Self {
-		present_at_obj + previous_calc - new_calc
+		present_at_obj + new_calc - previous_calc
 	}
 }
 

@@ -5,24 +5,20 @@ use crate::*;
 macro_rules! value_impl {
     ($value_ty: ty, $struct_ty: ident) => {
 	    impl $struct_ty {
-		    pub fn with_duration(&mut self, duration: f64) -> &mut Self { 
-				self.duration = duration;
-				self
+		    pub fn with_duration(self, duration: f64) -> Self { 
+				Self { duration, ..self }
 			}
 		    
-		    pub fn with_ease(&mut self, ease: Ease) -> &mut Self { 
-				self.ease = ease;
-				self
+		    pub fn with_ease(self, ease: Ease) -> Self { 
+				Self { ease, ..self }
 			}
 		    
-		    pub fn starting_at(&mut self, value: $value_ty) -> &mut Self { 
-				self.start = value;
-				self
+		    pub fn starting_at(self, value: $value_ty) -> Self { 
+				Self { start: value, ..self }
 			}
 		    
-		    pub fn ending_at(&mut self, value: $value_ty) -> &mut Self {
-				self.end = value;
-				self
+		    pub fn ending_at(self, value: $value_ty) -> Self {
+				Self { end: value, ..self }
 			}
 		    
 		    fn elapsed_ratio(&self) -> f64 {

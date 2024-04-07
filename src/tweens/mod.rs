@@ -15,10 +15,10 @@ pub mod tween_value_macro;
 #[allow(unused_imports)] pub use property::*;
 #[allow(unused_imports)] pub use id::*;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Callback {
 	pub(crate) target: Ref<Object>,
-	pub(crate) method: Rc<String>,
+	pub(crate) method: GodotString,
 	pub(crate) args: Vec<Variant>,
 }
 
@@ -29,7 +29,7 @@ impl Callback {
 				.assume_safe_if_sane()
 				.ok_or_else(|| anyhow!("Target is not sane."))?;
 
-		target.call_deferred(self.method.as_str(), &self.args);
+		target.call_deferred(self.method.new_ref(), &self.args);
 		Ok(())
 	}
 }
@@ -177,7 +177,7 @@ pub trait Tick: Sized {
 }
 
 #[enum_dispatch(Tick)]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum AnyTween {
 	Property(TweenProperty),
 	Method(TweenMethod),

@@ -10,7 +10,7 @@ mod tween_macros;
 #[allow(unused_imports)] pub use tween_variant::*;
 
 #[enum_dispatch(Tick)]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum TweenProperty {
 	i64(TweenProperty_i64),
 	f64(TweenProperty_f64),
@@ -21,3 +21,15 @@ pub enum TweenProperty {
 	Variant(TweenProperty_Variant),
 }
 
+#[derive(Debug, Clone)]
+enum LerpMode<T> {
+	// start value is recalculated whenever the state **switches** to Playing
+	Flexible { starting_ratio: f64 },
+	// start value is fixed
+	Absolute,
+	Relative { previous_value: T },
+}
+
+pub fn actual_ratio(starting: f64, current: f64) -> f64 {
+	(current - starting) / (1.0 - starting)
+}

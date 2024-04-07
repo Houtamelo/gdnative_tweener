@@ -2,9 +2,9 @@
 
 macro_rules! method_def {
 	($value_ty: ty, $struct_ty: ident) => {
-		#[derive(Debug)]
+		#[derive(Debug, Clone)]
 		pub struct $struct_ty {
-		    method: Rc<String>,
+		    pub method: GodotString,
 			pub target: Ref<Object>,
 			pub bound_node: Option<Ref<Node>>,
 			pub state: State,
@@ -28,7 +28,7 @@ macro_rules! method_register {
     ($value_ty: ty, $struct_ty: ident) => {
 	    impl $struct_ty {
 		    pub fn new(
-				method: impl Into<String>,
+				method: impl Into<GodotString>,
 				target: &impl Inherits<Object>,
 				start: $value_ty,
 				end: $value_ty,
@@ -36,7 +36,7 @@ macro_rules! method_register {
 				auto_play: AutoPlay)
 				-> Self {
 				Self {
-					method: Rc::new(method.into()),
+					method: method.into(),
 					target: unsafe { target.base() },
 					bound_node: None,
 					state: match auto_play.0 {
@@ -59,7 +59,7 @@ macro_rules! method_register {
 			}
 		
 			pub fn new_registered(
-				method: impl Into<String>,
+				method: impl Into<GodotString>,
 				target: &impl Inherits<Object>,
 				start: $value_ty,
 				end: $value_ty,
@@ -101,8 +101,16 @@ macro_rules! method_impl {
 			}
 		}
 	    
+	    impl From<$struct_ty> for AnyTween {
+			fn from(tween: $struct_ty) -> Self {
+				AnyTween::Method(tween.into()) 
+			}
+	    }
+	    
 	    impl $struct_ty {
-		    pub fn method(&self) -> Rc<String> { self.method.clone() }
+		    pub(crate) fn set_state_internal(&mut self, state: State) {
+			    self.state = state;
+		    }
 		    
 		    $(
 		    fn update_value(&mut self, t: f64) -> Result<()> {
@@ -111,10 +119,10 @@ macro_rules! method_impl {
 				
 				match unsafe { self.target.assume_safe_if_sane() } {
 					Some(target) => {
-						unsafe { target.call_deferred(self.method.as_str(), &[target_value.to_variant()]) };
+						unsafe { target.call_deferred(self.method.new_ref(), &[target_value.to_variant()]) };
 					}
 					None => {
-						bail!("Can not invoke `{}`, target is not sane.", self.method.as_str());
+						bail!("Can not invoke `{}`, target is not sane.", self.method);
 					}
 				}
 				

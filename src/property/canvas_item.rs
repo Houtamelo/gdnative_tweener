@@ -98,14 +98,14 @@ mod tests {
 	#[methods]
 	impl Test {
 		fn new(_owner: &Node2D) -> Self {
-			_owner.do_color_r(0., 1., 2.0);
+			_owner.do_color_r(1., 2.0);
 
 			Self {}
 		}
 
 		#[method]
 		fn _ready(&self, #[base] owner: &Node2D) {
-			owner.do_color_r(0., 1., 2.0);
+			owner.do_color_r(1., 2.0);
 		}
 	}
 }
