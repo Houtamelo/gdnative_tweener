@@ -150,47 +150,46 @@ impl TweensController {
 	
 	pub fn kill_boundeds(&mut self, bound_node: Ref<Node>) {
 		self.tweens
-			.retain(|_, tween| tween.bound_node().is_some_and(|n| n != &bound_node));
+			.retain(|_, tween| { 
+				tween.bound_node()
+					 .is_none_or(|n| n != &bound_node)
+			});
 		
 		self.sequences
-			.retain(|_, seq| seq.bound_node.as_ref().is_some_and(|n| n != &bound_node));
+			.retain(|_, seq| { 
+				seq.bound_node
+				   .as_ref()
+				   .is_none_or(|n| n != &bound_node)
+			});
 	}
 	
 	pub unsafe fn complete_tween(&mut self, id: ID) {
 		self.tweens
 			.remove(&id)
-			.map(|tween| {
-				tween.force_finish();
-			});
+			.map(AnyTween::force_finish);
 	}
 	
 	pub unsafe fn complete_boundeds(&mut self, bound_node: Ref<Node>) {
 		self.tweens
 			.extract_if(|_, tween| {
-				if tween.bound_node().is_some_and(|n| n != &bound_node) {
-					false
-				} else {
-					true
-				}
-			}).for_each(|(_, t)| t.force_finish());
+				tween.bound_node()
+					 .is_some_and(|n| n == &bound_node)
+			}).map(pluck!(.1))
+			.for_each(AnyTween::force_finish);
 		
 		self.sequences
 			.extract_if(|_, seq| {
-				if seq.bound_node.as_ref().is_some_and(|n| n != &bound_node) {
-					false
-				} else {
-					true
-				}
-			}).for_each(|(_, s)| s.force_finish());
+				seq.bound_node.as_ref()
+				   .is_some_and(|n| n == &bound_node)
+			}).map(pluck!(.1))
+			.for_each(Sequence::force_finish);
 	}
 	
 	#[allow(unused)]
 	pub(crate) unsafe fn complete_sequence(&mut self, id: ID) {
 		self.sequences
 		    .remove(&id)
-		    .map(|sequence| {
-			    sequence.force_finish();
-		    });
+		    .map(Sequence::force_finish);
 	}
 	
 	pub fn register_tween<T: Tick + FromTween>(&mut self, tween: impl Into<AnyTween>) -> TweenID<T> {
