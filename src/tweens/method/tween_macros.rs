@@ -2,7 +2,7 @@
 
 macro_rules! method_def {
 	($value_ty: ty, $struct_ty: ident) => {
-		#[derive(Debug, Clone)]
+		#[derive(Debug)]
 		pub struct $struct_ty {
 		    pub method: GodotString,
 			pub target: Ref<Object>,

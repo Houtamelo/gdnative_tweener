@@ -3,7 +3,7 @@ use crate::*;
 
 macro_rules! property_def {
     ($value_ty: ty, $struct_ty: ident) => {
-	    #[derive(Debug, Clone)]
+	    #[derive(Debug)]
 		pub struct $struct_ty {
 		    pub property: GodotString,
 			pub target: Ref<Object>,

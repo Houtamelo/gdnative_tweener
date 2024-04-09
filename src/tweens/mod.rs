@@ -1,3 +1,5 @@
+use std::any::Any;
+use std::fmt::{Debug, Formatter};
 #[allow(unused_imports)]
 use crate::*;
 use enum_dispatch::enum_dispatch;
@@ -15,14 +17,42 @@ pub mod tween_value_macro;
 #[allow(unused_imports)] pub use property::*;
 #[allow(unused_imports)] pub use id::*;
 
-#[derive(Debug, Clone)]
-pub struct Callback {
-	pub(crate) target: Ref<Object>,
-	pub(crate) method: GodotString,
-	pub(crate) args: Vec<Variant>,
+pub enum Callback {
+	GodotMethodCall(GodotMethodCall),
+	Closure(Box<dyn Fn() + 'static>)
+}
+
+impl Debug for Callback {
+	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+		match self {
+			Callback::GodotMethodCall(method) => { write!(f, "{method:?}") }
+			Callback::Closure(closure) => {
+				write!(f, "Closure id: {:?}", closure.type_id())
+			}
+		}
+	}
 }
 
 impl Callback {
+	pub unsafe fn invoke(&self) -> Result<()> {
+		match self {
+			Callback::GodotMethodCall(method) => { method.invoke() }
+			Callback::Closure(closure) => {
+				closure();
+				Ok(())
+			}
+		}
+	}
+}
+
+#[derive(Debug, Clone)]
+pub struct GodotMethodCall {
+	pub target: Ref<Object>,
+	pub method: GodotString,
+	pub args: Vec<Variant>,
+}
+
+impl GodotMethodCall {
 	pub unsafe fn invoke(&self) -> Result<()> {
 		let target =  
 			self.target
@@ -163,7 +193,7 @@ pub trait Tick: Sized {
 }
 
 #[enum_dispatch(Tick)]
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum AnyTween {
 	Property(TweenProperty),
 	Method(TweenMethod),

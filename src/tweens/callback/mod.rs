@@ -2,7 +2,7 @@
 use crate::*;
 use crate::internal_prelude::tween_base_macro::base_impl;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct TweenCallback {
 	pub callback: Callback,
 	pub bound_node: Option<Ref<Node>>,
@@ -18,18 +18,43 @@ pub struct TweenCallback {
 }
 
 impl TweenCallback {
-	pub fn new(fn_name: impl Into<GodotString>,
-	           target: &impl Inherits<Object>,
-	           args: Vec<Variant>,
-	           delay: f64,
-	           auto_play: AutoPlay)
-	           -> Self {
+	pub fn new_method(
+		target: &impl Inherits<Object>,
+		method: impl Into<GodotString>,
+		args: Vec<Variant>,
+		delay: f64,
+		auto_play: AutoPlay)
+		-> Self {
 		Self {
-			callback: Callback {
-				method: fn_name.into(),
-				target: unsafe { target.base() },
-				args,
+			callback: Callback::GodotMethodCall(
+				GodotMethodCall {
+					target: unsafe { target.base() },
+					method: method.into(),
+					args,
+				}),
+			bound_node: None,
+			state: match auto_play.0 {
+				true => State::Playing,
+				false => State::Paused,
 			},
+			delay,
+			speed_scale: 1.,
+			elapsed_time: 0.,
+			cycle_count: 0,
+			pause_mode: TweenPauseMode::STOP,
+			process_mode: TweenProcessMode::IDLE,
+			loop_mode: LoopMode::Finite(0),
+			do_on_finish: Vec::new(),
+		}
+	}
+	
+	pub fn new_closure(
+		closure: impl Fn() + 'static,
+		delay: f64,
+		auto_play: AutoPlay)
+		-> Self {
+		Self {
+			callback: Callback::Closure(Box::new(closure)),
 			bound_node: None,
 			state: match auto_play.0 {
 				true => State::Playing,
@@ -46,16 +71,6 @@ impl TweenCallback {
 		}
 	}
 
-	pub fn new_registered(fn_name: impl Into<GodotString>,
-	                      target: &impl Inherits<Object>,
-	                      args: Vec<Variant>,
-	                      delay: f64,
-	                      auto_play: AutoPlay)
-	                      -> Result<TweenID<TweenCallback>> {
-		Self::new(fn_name, target, args, delay, auto_play)
-			.register()
-	}
-
 	pub fn register(self) -> Result<TweenID<TweenCallback>> {
 		let singleton =
 			&mut TweensController::singleton().try_borrow_mut()?;
@@ -66,9 +81,7 @@ impl TweenCallback {
 }
 
 impl TweenCallback {
-	pub fn method(&self) -> &GodotString { &self.callback.method }
-	pub fn target(&self) -> Ref<Object> { self.callback.target }
-	pub fn args(&self) -> &[Variant] { &self.callback.args }
+	pub fn callback(&self) -> &Callback { &self.callback }
 	
 	fn seek_end(&mut self) {
 		unsafe { self.callback.invoke().log_if_err() };

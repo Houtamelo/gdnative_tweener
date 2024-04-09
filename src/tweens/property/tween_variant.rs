@@ -5,7 +5,7 @@ use crate::tweens::tween_base_macro::base_impl;
 use crate::tweens::tween_value_macro::value_impl;
 use crate::tweens::property::tween_macros::property_impl;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct TweenProperty_Variant {
 	pub property: GodotString,
 	pub target: Ref<Object>,

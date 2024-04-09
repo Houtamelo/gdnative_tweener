@@ -10,7 +10,7 @@ mod tween_macros;
 #[allow(unused_imports)] pub use tween_variant::*;
 
 #[enum_dispatch(Tick)]
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum TweenProperty {
 	i64(TweenProperty_i64),
 	f64(TweenProperty_f64),

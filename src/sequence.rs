@@ -203,18 +203,25 @@ impl Sequence {
 		Self { loop_mode: LoopMode::Infinite, ..self }
 	}
 
-	pub fn when_finished(mut self,
-	                     method: impl Into<GodotString>,
-	                     target: &impl Inherits<Object>,
-	                     args: Vec<Variant>)
-	                     -> Self {
-		let callback = Callback {
+	pub fn call_when_finished(mut self, f: impl Fn() + 'static) -> Self {
+		let closure = Callback::Closure(Box::new(f));
+		self.do_on_finish.push(closure);
+		self
+	}
+
+	pub fn method_when_finished(
+		mut self,
+		target: &impl Inherits<Object>,
+		method: impl Into<GodotString>,
+		args: Vec<Variant>)
+		-> Self {
+		let method_call = Callback::GodotMethodCall(GodotMethodCall {
 			target: unsafe { target.base() },
 			method: method.into(),
 			args,
-		};
-		
-		self.do_on_finish.push(callback);
+		});
+
+		self.do_on_finish.push(method_call);
 		self
 	}
 	

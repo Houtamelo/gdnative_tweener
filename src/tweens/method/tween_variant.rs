@@ -4,7 +4,7 @@ use crate::internal_prelude::tween_base_macro::base_impl;
 use crate::internal_prelude::tween_value_macro::value_impl;
 use crate::tweens::method::tween_macros::method_impl;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct TweenMethod_Variant {
 	pub method: GodotString,
 	pub target: Ref<Object>,
