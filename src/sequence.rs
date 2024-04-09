@@ -1,7 +1,6 @@
 #[allow(unused_imports)]
 use crate::*;
 use std::fmt::{Display, Formatter};
-use std::iter;
 use crate::id::{ID, WeakID};
 
 #[derive(Debug, Clone)]
@@ -46,8 +45,8 @@ impl Display for SequenceID {
 
 #[derive(Debug)]
 pub struct Sequence {
-	pub tweens: Vec<TweenFork>,
-	pub inserteds: Vec<(f64, AnyTween)>,
+	pub queue: Vec<Vec<ForkElement>>,
+	pub inserteds: Vec<(f64, InsertedElement)>,
 	pub bound_node: Option<Ref<Node>>,
 	pub state: State,
 	pub delay: f64,
@@ -60,40 +59,34 @@ pub struct Sequence {
 }
 
 #[derive(Debug)]
-pub struct TweenFork {
-	pub main: AnyTween,
-	pub parallels: Vec<AnyTween>,
+pub enum ForkElement {
+	Tween(AnyTween),
+	Callback { invoked: bool, callback: Callback },
+	Delay { total_time: f64, elapsed_time: f64 },
 }
 
-impl TweenFork {
-	pub fn new(main: AnyTween) -> Self {
-		Self {
-			main,
-			parallels: Vec::new(),
-		}
+impl From<AnyTween> for ForkElement {
+	fn from(value: AnyTween) -> Self {
+		Self::Tween(value)
 	}
-	
-	#[allow(unused)]
-	fn iter(&self) -> impl Iterator<Item = &AnyTween> {
-		iter::once(&self.main)
-			.chain(self.parallels.iter())
-	}
-	
-	fn iter_mut(&mut self) -> impl Iterator<Item = &mut AnyTween> {
-		iter::once(&mut self.main)
-			.chain(self.parallels.iter_mut())
-	}
-	
-	fn into_iter(self) -> impl Iterator<Item = AnyTween> {
-		iter::once(self.main)
-			.chain(self.parallels.into_iter())
+}
+
+#[derive(Debug)]
+pub enum InsertedElement {
+	Tween(AnyTween),
+	Callback { invoked: bool, callback: Callback },
+}
+
+impl From<AnyTween> for InsertedElement {
+	fn from(value: AnyTween) -> Self {
+		Self::Tween(value)
 	}
 }
 
 impl Sequence {
 	pub fn new() -> Self {
 		Self {
-			tweens: Vec::new(),
+			queue: Vec::new(),
 			inserteds: Vec::new(),
 			bound_node: None,
 			state: State::Playing,
@@ -128,7 +121,30 @@ impl Sequence {
 			}
 		}
 		
-		self.tweens.push(TweenFork::new(tween));
+		self.queue.push(vec![tween.into()]);
+	}
+	
+	pub fn append_call(&mut self, f: impl Fn() + 'static) {
+		let callback = Callback::Closure(Box::new(f));
+		self.queue.push(vec![ForkElement::Callback { invoked: false, callback }]);
+	}
+	
+	pub fn append_method(
+		&mut self,
+		target: &impl Inherits<Object>,
+		method: impl Into<GodotString>,
+		args: Vec<Variant>) {
+		let callback = Callback::GodotMethodCall(GodotMethodCall {
+			target: unsafe { target.base() },
+			method: method.into(),
+			args,
+		});
+
+		self.queue.push(vec![ForkElement::Callback { invoked: false, callback }]);
+	}
+	
+	pub fn append_delay(&mut self, time: f64) {
+		self.queue.push(vec![ForkElement::Delay { total_time: time, elapsed_time: 0. }]);
 	}
 	
 	pub fn join(&mut self, any_tween: impl Into<AnyTween>) {
@@ -144,10 +160,38 @@ impl Sequence {
 			}
 		}
 		
-		if let Some(back) = self.tweens.last_mut() {
-			back.parallels.push(tween);
+		if let Some(back) = self.queue.last_mut() {
+			back.push(tween.into());
 		} else {
 			self.append(tween);
+		}
+	}
+	
+	pub fn join_call(&mut self, f: impl Fn() + 'static) {
+		let callback = Callback::Closure(Box::new(f));
+		
+		if let Some(back) = self.queue.last_mut() {
+			back.push(ForkElement::Callback { invoked: false, callback });
+		} else {
+			self.queue.push(vec![ForkElement::Callback { invoked: false, callback }]);
+		}
+	}
+	
+	pub fn join_method(
+		&mut self,
+		target: &impl Inherits<Object>,
+		method: impl Into<GodotString>,
+		args: Vec<Variant>) {
+		let callback = Callback::GodotMethodCall(GodotMethodCall {
+			target: unsafe { target.base() },
+			method: method.into(),
+			args,
+		});
+
+		if let Some(back) = self.queue.last_mut() {
+			back.push(ForkElement::Callback { invoked: false, callback });
+		} else {
+			self.queue.push(vec![ForkElement::Callback { invoked: false, callback }]);
 		}
 	}
 	
@@ -164,7 +208,27 @@ impl Sequence {
 			}
 		}
 		
-		self.inserteds.push((time, tween));
+		self.inserteds.push((time, tween.into()));
+	}
+	
+	pub fn insert_call(&mut self, time: f64, f: impl Fn() + 'static) {
+		let callback = Callback::Closure(Box::new(f));
+		self.inserteds.push((time, InsertedElement::Callback { invoked: false, callback }));
+	}
+	
+	pub fn insert_method(
+		&mut self,
+		time: f64,
+		target: &impl Inherits<Object>,
+		method: impl Into<GodotString>,
+		args: Vec<Variant>) {
+		let callback = Callback::GodotMethodCall(GodotMethodCall {
+			target: unsafe { target.base() },
+			method: method.into(),
+			args,
+		});
+
+		self.inserteds.push((time, InsertedElement::Callback { invoked: false, callback }));
 	}
 
 	pub fn bound_to(self, node: &impl Inherits<Node>) -> Self {
@@ -232,19 +296,36 @@ impl Sequence {
 		
 		self.state = State::Playing;
 
-		self.tweens
+		self.queue
 		    .iter_mut()
-		    .flat_map(TweenFork::iter_mut)
-		    .for_each(|tween| {
-			    tween.stop();
-			    tween.pause();
+		    .flat_map(|vec| vec.iter_mut())
+		    .for_each(|fork_element| {
+			    match fork_element {
+				    ForkElement::Tween(tween) => {
+					    tween.stop();
+					    tween.pause();
+				    }
+				    ForkElement::Callback { invoked, .. } => {
+					    *invoked = false;
+				    }
+				    ForkElement::Delay { elapsed_time, .. } => {
+					    *elapsed_time = 0.;
+				    }
+			    }
 		    });
 
 		self.inserteds
 		    .iter_mut()
-		    .for_each(|(_, tween)| {
-			    tween.stop();
-			    tween.pause();
+		    .for_each(|(_, inserted_element)| {
+			    match inserted_element {
+				    InsertedElement::Tween(tween) => {
+					    tween.stop();
+					    tween.pause();
+				    }
+				    InsertedElement::Callback { invoked, .. } => {
+					    *invoked = false;
+				    }
+			    }
 		    });
 	}
 	
@@ -253,20 +334,31 @@ impl Sequence {
 			return;
 		}
 
-		self.tweens
+		self.queue
 		    .iter_mut()
-		    .flat_map(TweenFork::iter_mut)
-		    .for_each(|tween| {
-			    if tween.is_playing() {
-				    tween.pause();
+		    .flat_map(|vec| vec.iter_mut())
+		    .for_each(|fork_element| {
+			    match fork_element {
+				    ForkElement::Tween(tween) => {
+					    if tween.is_playing() {
+						    tween.pause();
+					    }
+				    }
+				    ForkElement::Callback { .. } => {}
+				    ForkElement::Delay { .. } => {}
 			    }
 		    });
 
 		self.inserteds
 		    .iter_mut()
-		    .for_each(|(_, tween)| {
-			    if tween.is_playing() {
-				    tween.pause();
+		    .for_each(|(_, inserted_element)| {
+			    match inserted_element {
+				    InsertedElement::Tween(tween) => {
+					    if tween.is_playing() {
+						    tween.pause();
+					    }
+				    }
+				    InsertedElement::Callback { .. } => {}
 			    }
 		    });
 	}
@@ -279,17 +371,34 @@ impl Sequence {
 		self.state = State::Stopped;
 		self.total_elapsed_time = 0.0;
 		
-		self.tweens
+		self.queue
 			.iter_mut()
-			.flat_map(TweenFork::iter_mut)
-			.for_each(|tween| {
-				tween.stop();
+			.flat_map(|vec| vec.iter_mut())
+			.for_each(|fork_element| {
+				match fork_element {
+					ForkElement::Tween(tween) => {
+						tween.stop();
+					}
+					ForkElement::Callback { invoked, .. } => {
+						*invoked = false;
+					}
+					ForkElement::Delay { elapsed_time, .. } => {
+						*elapsed_time = 0.;
+					}
+				}
 			});
 		
 		self.inserteds
 			.iter_mut()
-			.for_each(|(_, tween)| {
-				tween.stop();
+			.for_each(|(_, inserted_element)| {
+				match inserted_element {
+					InsertedElement::Tween(tween) => {
+						tween.stop();
+					}
+					InsertedElement::Callback { invoked, .. } => {
+						*invoked = false;
+					}
+				}
 			});
 	}
 
@@ -297,40 +406,68 @@ impl Sequence {
 		let delta_time = delta_time * self.speed_scale;
 		self.total_elapsed_time += delta_time;
 		
-		for (at, tween) in self.inserteds.iter_mut() {
-			match tween.state() {
-				State::Playing => {
-					tween.advance_time(delta_time);
-				}
-				State::Paused => {
-					if *at <= self.total_elapsed_time {
-						let above_at = self.total_elapsed_time - *at;
-						tween.play();
-						tween.advance_time(above_at);
+		for (at, inserted_element) in self.inserteds.iter_mut() {
+			match inserted_element {
+				InsertedElement::Tween(tween) => {
+					match tween.state() {
+						State::Playing => {
+							tween.advance_time(delta_time);
+						}
+						State::Paused => {
+							if *at <= self.total_elapsed_time {
+								let above_at = self.total_elapsed_time - *at;
+								tween.play();
+								tween.advance_time(above_at);
+							}
+						}
+						State::Stopped => {}
 					}
 				}
-				State::Stopped => {}
+				InsertedElement::Callback { invoked, callback } => {
+					if *invoked == false && *at >= self.total_elapsed_time {
+						*invoked = true;
+						unsafe { callback.invoke().log_if_err() };
+					}
+				}
 			}
 		}
 
 		let mut remaining_delta = delta_time;
-		let mut mains_iter = self.tweens.iter_mut();
+		let mut queue_iter = self.queue.iter_mut();
 		
-		while let Some(fork) = mains_iter.next() && remaining_delta > 0. {
+		while let Some(fork) = queue_iter.next() && remaining_delta > 0. {
 			remaining_delta =
 				fork.iter_mut()
-				    .filter_map(|tween| {
-					    match tween.state() {
-						    State::Playing => {
-							    tween.advance_time(remaining_delta)
+				    .filter_map(|fork_element| {
+					    match fork_element {
+						    ForkElement::Tween(tween) => {
+							    match tween.state() {
+								    State::Playing => {
+									    tween.advance_time(remaining_delta)
+								    }
+								    State::Paused => {
+									    tween.play();
+									    tween.advance_time(remaining_delta)
+								    }
+								    State::Stopped => Some(remaining_delta),
+							    }
 						    }
-						    State::Paused => {
-							    tween.play();
-							    tween.advance_time(remaining_delta)
+						    ForkElement::Callback { invoked, callback } => {
+							    if *invoked == false {
+								    *invoked = true;
+								    unsafe { callback.invoke().log_if_err() };
+							    }
+
+							    Some(remaining_delta)
 						    }
-						    State::Stopped => return Some(remaining_delta),
+						    ForkElement::Delay { total_time, elapsed_time } => {
+							    *elapsed_time += remaining_delta;
+							    
+							    let above_total = *elapsed_time - *total_time;
+							    (above_total > 0.).then_some(above_total)							    
+						    }
 					    }
-				    }).min_by(f64::total_cmp).unwrap_or(0.);
+				    }).min_by(f64::total_cmp).unwrap_or(-1.);
 		}
 		
 		if remaining_delta > 0. {
@@ -339,16 +476,39 @@ impl Sequence {
 	}
 
 	pub fn force_finish(mut self) {
-		self.tweens
+		self.queue
 			.drain(..)
 			.for_each(|fork| { 
 				fork.into_iter()
-					.for_each(AnyTween::force_finish)
+					.for_each(|fork_element| {
+						match fork_element {
+							ForkElement::Tween(tween) => {
+								tween.force_finish();
+							}
+							ForkElement::Callback { invoked, callback } => {
+								if invoked == false {
+									unsafe { callback.invoke().log_if_err() };
+								}
+							}
+							ForkElement::Delay { .. } => {}
+						}
+					})
 			});
 		
 		self.inserteds
 			.drain(..)
-			.for_each(|(_, tween)| tween.force_finish());
+			.for_each(|(_, inserted_element)| {
+				match inserted_element {
+					InsertedElement::Tween(tween) => {
+						tween.force_finish()
+					}
+					InsertedElement::Callback { invoked, callback } => {
+						if invoked == false {
+							unsafe { callback.invoke().log_if_err() };
+						}
+					}
+				}
+			});
 		
 		self.on_finish();
 	}
