@@ -6,6 +6,8 @@ edition = "2021"
 description = "A port of DoTween(3rd party package for Unity) to Godot 3.5, using GdNative."
 license = "MIT"
 repository = "https://github.com/Houtamelo/gdnative_tweener"
+categories = ["game-development", "api-bindings"]
+keywords = ["godot", "tweening", "animation", "gdnative", "dotween"]
 
 [lib]
 crate-type = ["lib", "cdylib"]
