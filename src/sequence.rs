@@ -62,7 +62,7 @@ pub struct Sequence {
 pub enum ForkElement {
 	Tween(AnyTween),
 	Callback { invoked: bool, callback: Callback },
-	Delay { total_time: f64, elapsed_time: f64 },
+	Interval { total_time: f64, elapsed_time: f64 },
 }
 
 impl From<AnyTween> for ForkElement {
@@ -143,8 +143,8 @@ impl Sequence {
 		self.queue.push(vec![ForkElement::Callback { invoked: false, callback }]);
 	}
 	
-	pub fn append_delay(&mut self, time: f64) {
-		self.queue.push(vec![ForkElement::Delay { total_time: time, elapsed_time: 0. }]);
+	pub fn append_interval(&mut self, time: f64) {
+		self.queue.push(vec![ForkElement::Interval { total_time: time, elapsed_time: 0. }]);
 	}
 	
 	pub fn join(&mut self, any_tween: impl Into<AnyTween>) {
@@ -308,7 +308,7 @@ impl Sequence {
 				    ForkElement::Callback { invoked, .. } => {
 					    *invoked = false;
 				    }
-				    ForkElement::Delay { elapsed_time, .. } => {
+				    ForkElement::Interval { elapsed_time, .. } => {
 					    *elapsed_time = 0.;
 				    }
 			    }
@@ -345,7 +345,7 @@ impl Sequence {
 					    }
 				    }
 				    ForkElement::Callback { .. } => {}
-				    ForkElement::Delay { .. } => {}
+				    ForkElement::Interval { .. } => {}
 			    }
 		    });
 
@@ -382,7 +382,7 @@ impl Sequence {
 					ForkElement::Callback { invoked, .. } => {
 						*invoked = false;
 					}
-					ForkElement::Delay { elapsed_time, .. } => {
+					ForkElement::Interval { elapsed_time, .. } => {
 						*elapsed_time = 0.;
 					}
 				}
@@ -460,7 +460,7 @@ impl Sequence {
 
 							    Some(remaining_delta)
 						    }
-						    ForkElement::Delay { total_time, elapsed_time } => {
+						    ForkElement::Interval { total_time, elapsed_time } => {
 							    *elapsed_time += remaining_delta;
 							    
 							    let above_total = *elapsed_time - *total_time;
@@ -490,7 +490,7 @@ impl Sequence {
 									unsafe { callback.invoke().log_if_err() };
 								}
 							}
-							ForkElement::Delay { .. } => {}
+							ForkElement::Interval { .. } => {}
 						}
 					})
 			});
