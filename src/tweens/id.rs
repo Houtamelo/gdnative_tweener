@@ -10,7 +10,7 @@ pub struct TweenID<T: Tick + FromTween>(pub WeakID, PhantomData<T>);
 
 #[derive(Debug, Clone)]
 pub struct TweenID_Variant<TTween: Tick + FromTween,
-                           TVar: _Lerp + ToVariant + FromVariant + Clone + Copy> {
+                           TVar: _Lerp + ToVariant + FromVariant + Clone> {
 	pub id: TweenID<TTween>,
 	type_hint: PhantomData<TVar>,
 }

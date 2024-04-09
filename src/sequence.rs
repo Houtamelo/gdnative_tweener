@@ -2,11 +2,41 @@
 use crate::*;
 use std::fmt::{Display, Formatter};
 use std::iter;
-use crate::id::WeakID;
+use crate::id::{ID, WeakID};
 
 #[derive(Debug, Clone)]
 #[repr(transparent)]
 pub struct SequenceID(pub WeakID);
+
+impl SequenceID {
+	pub fn map<TMap>(&self, f: impl FnOnce(&Sequence) -> TMap) -> Result<TMap> {
+		let id =
+			Weak::upgrade(&self.0.0)
+				.ok_or_else(|| anyhow!(
+					"Tween with id `{}` no longer exists.", self))?;
+
+		let brain =
+			TweensController::singleton().try_borrow()?;
+
+		brain.get_sequence(ID(id))
+		     .ok_or_else(|| anyhow!("Tween with id `{}` no longer exists.", * self ))
+		     .map(f)
+	}
+
+	pub fn map_mut<TMap>(&self, f: impl FnOnce(&mut Sequence) -> TMap) -> Result<TMap> {
+		let id =
+			Weak::upgrade(&self.0.0)
+				.ok_or_else(|| anyhow!(
+					"Tween with id `{}` no longer exists.", self))?;
+
+		let brain =
+			&mut TweensController::singleton().try_borrow_mut()?;
+
+		brain.get_sequence_mut(ID(id))
+		     .ok_or_else(|| anyhow!("Tween with id `{}` no longer exists.", * self ))
+		     .map(f)
+	}
+}
 
 impl Display for SequenceID {
 	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -87,13 +117,33 @@ impl Sequence {
 
 	pub fn append(&mut self, any_tween: impl Into<AnyTween>) {
 		let mut tween = any_tween.into();
-		tween.pause();
+		
+		match self.state {
+			| State::Playing
+			| State::Paused => {
+				tween.pause();
+			}
+			State::Stopped => {
+				tween.stop();
+			}
+		}
+		
 		self.tweens.push(TweenFork::new(tween));
 	}
 	
 	pub fn join(&mut self, any_tween: impl Into<AnyTween>) {
 		let mut tween = any_tween.into();
-		tween.pause();
+
+		match self.state {
+			| State::Playing
+			| State::Paused => {
+				tween.pause();
+			}
+			State::Stopped => {
+				tween.stop();
+			}
+		}
+		
 		if let Some(back) = self.tweens.last_mut() {
 			back.parallels.push(tween);
 		} else {
@@ -102,11 +152,27 @@ impl Sequence {
 	}
 	
 	pub fn insert(&mut self, time: f64, tween: impl Into<AnyTween>) {
-		self.inserteds.push((time, tween.into()));
+		let mut tween = tween.into();
+
+		match self.state {
+			| State::Playing
+			| State::Paused => {
+				tween.pause();
+			}
+			State::Stopped => {
+				tween.stop();
+			}
+		}
+		
+		self.inserteds.push((time, tween));
 	}
 
 	pub fn bound_to(self, node: &impl Inherits<Node>) -> Self {
 		Self { bound_node: Some(unsafe { node.base() }), ..self }
+	}
+	
+	pub fn unbound(self) -> Self {
+		Self { bound_node: None, ..self }
 	}
 
 	pub fn with_delay(self, delay: f64) -> Self {
@@ -152,10 +218,57 @@ impl Sequence {
 		self
 	}
 	
-	pub fn play(&mut self) { self.state = State::Playing; }
-	pub fn pause(&mut self) { self.state = State::Paused; }
+	pub fn play(&mut self) {
+		if self.state == State::Playing {
+			return;
+		}
+		
+		self.state = State::Playing;
+
+		self.tweens
+		    .iter_mut()
+		    .flat_map(TweenFork::iter_mut)
+		    .for_each(|tween| {
+			    tween.stop();
+			    tween.pause();
+		    });
+
+		self.inserteds
+		    .iter_mut()
+		    .for_each(|(_, tween)| {
+			    tween.stop();
+			    tween.pause();
+		    });
+	}
+	
+	pub fn pause(&mut self) {
+		if self.state == State::Paused {
+			return;
+		}
+
+		self.tweens
+		    .iter_mut()
+		    .flat_map(TweenFork::iter_mut)
+		    .for_each(|tween| {
+			    if tween.is_playing() {
+				    tween.pause();
+			    }
+		    });
+
+		self.inserteds
+		    .iter_mut()
+		    .for_each(|(_, tween)| {
+			    if tween.is_playing() {
+				    tween.pause();
+			    }
+		    });
+	}
 
 	pub fn stop(&mut self) {
+		if self.state == State::Stopped {
+			return;
+		}
+		
 		self.state = State::Stopped;
 		self.total_elapsed_time = 0.0;
 		
@@ -164,14 +277,12 @@ impl Sequence {
 			.flat_map(TweenFork::iter_mut)
 			.for_each(|tween| {
 				tween.stop();
-				tween.pause();
 			});
 		
 		self.inserteds
 			.iter_mut()
 			.for_each(|(_, tween)| {
 				tween.stop();
-				tween.pause();
 			});
 	}
 
@@ -198,11 +309,10 @@ impl Sequence {
 		let mut remaining_delta = delta_time;
 		let mut mains_iter = self.tweens.iter_mut();
 		
-		while let Some(fork) = mains_iter.next()
-			&& remaining_delta > 0. {
+		while let Some(fork) = mains_iter.next() && remaining_delta > 0. {
 			remaining_delta =
 				fork.iter_mut()
-				    .map(|tween| {
+				    .filter_map(|tween| {
 					    match tween.state() {
 						    State::Playing => {
 							    tween.advance_time(remaining_delta)
@@ -211,10 +321,9 @@ impl Sequence {
 							    tween.play();
 							    tween.advance_time(remaining_delta)
 						    }
-						    State::Stopped => remaining_delta,
-					    } 
-				    }).min_by(f64::total_cmp)
-					.unwrap_or(remaining_delta);
+						    State::Stopped => return Some(remaining_delta),
+					    }
+				    }).min_by(f64::total_cmp).unwrap_or(0.);
 		}
 		
 		if remaining_delta > 0. {

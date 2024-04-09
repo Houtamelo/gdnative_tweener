@@ -21,15 +21,14 @@ pub enum TweenProperty {
 	Variant(TweenProperty_Variant),
 }
 
-#[derive(Debug, Clone)]
-enum LerpMode<T> {
-	// start value is recalculated whenever the state **switches** to Playing
-	Flexible { starting_ratio: f64 },
-	// start value is fixed
-	Absolute,
-	Relative { previous_value: T },
-}
+pub(crate) fn eval_property<T: FromVariant>(obj: &impl Inherits<Object>, property: &GodotString) -> Result<T> {
+	let Some(target) = (unsafe { obj.base().assume_safe_if_sane() })
+		else { bail!("Target is not sane, cannot evaluate property `{property}`'s value.") };
 
-pub fn actual_ratio(starting: f64, current: f64) -> f64 {
-	(current - starting) / (1.0 - starting)
+	let variant = target.get_indexed(property.new_ref());
+
+	variant.try_to::<T>()
+	       .map_err(|err| anyhow!(
+			   "Target property `{property}` is not of type `{}`, got: `{variant:?}`. \n\
+			    Error: {}", type_name::<T>(), err))
 }

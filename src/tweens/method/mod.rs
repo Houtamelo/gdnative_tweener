@@ -14,7 +14,7 @@ pub use tween_variant::*;
 pub enum TweenMethod {
 	i64(TweenMethod_i64),
 	f64(TweenMethod_f64),
-	String(TweenMethod_GodotString),
+	String(TweenMethod_String),
 	Color(TweenMethod_Color),
 	Vector2(TweenMethod_Vector2),
 	Vector3(TweenMethod_Vector3),

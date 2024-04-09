@@ -63,7 +63,7 @@ pub trait Tick: Sized {
 	fn pause(&mut self);
 	fn stop(&mut self);
 
-	fn is_running(&self) -> bool { self.state() == State::Playing }
+	fn is_playing(&self) -> bool { self.state() == State::Playing }
 	fn is_paused(&self) -> bool { self.state() == State::Paused }
 	fn is_stopped(&self) -> bool { self.state() == State::Stopped }
 	
@@ -72,27 +72,14 @@ pub trait Tick: Sized {
 	fn bound_node(&self) -> Option<&Ref<Node>>;
 	
 	fn loop_mode(&self) -> LoopMode;
-	fn cycle_duration(&self) -> f64;
 	fn delay(&self) -> f64;
-	
-	fn total_duration(&self) -> Duration {
-		match self.loop_mode() {
-			LoopMode::Infinite => Duration::Infinite,
-			LoopMode::Finite(loop_count) => { 
-				let duration = self.delay() + self.cycle_duration() * (loop_count as f64 + 1.);
-				Duration::Finite(duration)
-			}
-		} 
-	}
 	
 	fn elapsed_time(&self) -> f64;
 	fn speed_scale(&self) -> f64;
 	
-	/// # Returns
-	/// Excess time
-	fn advance_time(&mut self, delta_time: f64) -> f64;
+	fn advance_time(&mut self, delta_time: f64) -> Option<f64>;
 	fn callbacks_on_finish(&self) -> &[Callback];
-
+	
 	/*
 	fn seek(&mut self, time: f64);
 
@@ -112,9 +99,8 @@ pub trait Tick: Sized {
 
 		self.callbacks_on_finish()
 			.iter()
-		    .for_each(|callback| {
-			    unsafe { callback.invoke().log_if_err() };
-		    });
+		    .for_each(|callback| unsafe { 
+			    callback.invoke().log_if_err() });
 	}
 	
 	fn force_finish(self);
@@ -187,4 +173,8 @@ pub enum AnyTween {
 pub trait FromTween {
 	fn from_tween(tween: &AnyTween) -> Option<&Self>;
 	fn from_tween_mut(tween: &mut AnyTween) -> Option<&mut Self>;
+}
+
+pub(crate) fn ratio_with_delay_duration(delay: f64, duration: f64, elapsed_time: f64) -> f64 {
+	f64::max((elapsed_time - delay) / duration, 0.)
 }

@@ -9,7 +9,7 @@ pub struct TweenMethod_Variant {
 	pub method: GodotString,
 	pub target: Ref<Object>,
 	pub bound_node: Option<Ref<Node>>,
-	pub state: State,
+	state: State,
 	pub delay: f64,
 	pub duration: f64,
 	pub ease: Ease,
@@ -26,7 +26,7 @@ pub struct TweenMethod_Variant {
 }
 
 impl TweenMethod_Variant {
-	pub fn new<T: _Lerp + FromVariant + ToVariant + Clone + Copy>(
+	pub fn new<T: _Lerp + FromVariant + ToVariant + Clone>(
 		method: impl Into<GodotString>,
 		target: &impl Inherits<Object>,
 		start: T,
@@ -59,7 +59,7 @@ impl TweenMethod_Variant {
 		}
 	}
 
-	pub fn new_registered<T: _Lerp + FromVariant + ToVariant + Clone + Copy>(
+	pub fn new_registered<T: _Lerp + FromVariant + ToVariant + Clone>(
 		method: impl Into<GodotString>,
 		target: &impl Inherits<Object>,
 		start: T,
@@ -72,28 +72,12 @@ impl TweenMethod_Variant {
 			.register::<T>()
 	}
 
-	pub fn register<T: _Lerp + FromVariant + ToVariant + Clone + Copy>(self) -> Result<TweenID<TweenMethod_Variant>> {
+	pub fn register<T: _Lerp + FromVariant + ToVariant + Clone>(self) -> Result<TweenID<TweenMethod_Variant>> {
 		let singleton =
 			&mut TweensController::singleton().try_borrow_mut()?;
 
 		let id = singleton.register_tween::<TweenMethod_Variant>(TweenMethod::Variant(self));
 		Ok(id)
-	}
-
-	fn update_value(&mut self, t: f64) -> Result<()> {
-		let percent = self.ease.sample(t);
-		let target_value = (self.lerp_fn)(&self.start, &self.end, percent);
-
-		match unsafe { self.target.assume_safe_if_sane() } {
-			Some(target) => {
-				unsafe { target.call_deferred(self.method.new_ref(), &[target_value.to_variant()]) };
-			}
-			None => {
-				bail!("Can not invoke `{}`, target is not sane.", self.method);
-			}
-		}
-
-		Ok(())
 	}
 }
 

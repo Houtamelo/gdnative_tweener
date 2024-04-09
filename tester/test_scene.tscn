@@ -40,3 +40,10 @@ margin_top = 39.25
 margin_right = 33.0
 margin_bottom = 59.25
 text = "relative"
+
+[node name="speed_based" type="Button" parent="test_buttons"]
+margin_left = -27.0
+margin_top = 69.25
+margin_right = 68.0
+margin_bottom = 89.25
+text = "speed_based"

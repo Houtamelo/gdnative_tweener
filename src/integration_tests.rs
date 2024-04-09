@@ -10,54 +10,60 @@ struct Report {
 
 impl Display for Report {
 	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-		let x = match &self.x {
-			None => "Ok",
-			Some(err) => &err,
-		};
+		writeln!(f, "{:.2}:", self.time)?;
+
+		if let Some(err) = &self.x {
+			writeln!(f, "\tX: {}", err)?;
+		}
 		
-		let y = match &self.y {
-			None => "Ok",
-			Some(err) => &err,
-		};
+		if let Some(err) = &self.y {
+			writeln!(f, "\tY: {}", err)?;
+		}
 		
-		let color = match &self.color {
-			None => "Ok",
-			Some(err) => &err,
-		};
+		if let Some(err) = &self.color {
+			writeln!(f, "\tColor: {}", err)?;
+		}
 		
-		write!(f, "{:.2}: \n\tX: {}\n\tY: {}\n\tColor: {}", self.time, x, y, color)
+		Ok(())
 	}
 }
 
 impl Report {
-	fn generate(owner: &Node2D, time: f64, expected_x: f64, expected_y: f64, expected_color_r: f64) -> Report {
+	fn generate(owner: &Node2D, time: f64, expected_x: f64, expected_y: f64, expected_r: f64) -> Option<Report> {
 		let owner_x = owner.position().x as f64;
-		let x = if f64::abs(owner_x - expected_x) > 0.01 {
-			Some(format!("Expected x: {}, actual x: {}", expected_x, owner_x))
-		} else {
-			None
-		};
+		let x =
+			if f64::abs(owner_x - expected_x) > (owner_x.abs() + expected_x.abs()) / 1000. {
+				Some(format!("Expected x: {}, actual x: {}", expected_x, owner_x))
+			} else {
+				None
+			};
 		
 		let owner_y = owner.position().y as f64;
-		let y = if f64::abs(owner_y - expected_y) > 0.01 {
-			Some(format!("Expected y: {}, actual y: {}", expected_y, owner_y))
-		} else {
-			None
-		};
+		let y =
+			if f64::abs(owner_y - expected_y) > (owner_y.abs() + expected_y.abs()) / 1000. {
+				Some(format!("Expected y: {}, actual y: {}", expected_y, owner_y))
+			} else {
+				None
+			};
 		
 		let owner_r = owner.modulate().r as f64;
-		let color = if f64::abs(owner_r - expected_color_r) > 0.01 {
-			Some(format!("Expected color r: {}, actual color r: {}", expected_color_r, owner_r))
+		let color =
+			if f64::abs(owner_r - expected_r) > (owner_r.abs() + expected_r.abs()) / 1000. {
+				Some(format!("Expected color r: {}, actual color r: {}", expected_r, owner_r))
+			} else {
+				None
+			};
+
+		if x.is_some() || y.is_some() || color.is_some() {
+			Some(Report { x, y, color, time })
 		} else {
 			None
-		};
-
-		Report { x, y, color, time }
+		}
 	}
 }
 
 enum State {
-	Running(Test),
+	Running { test: Test, last_time: Option<f64> },
 	PrintingReports,
 	Finished,
 }
@@ -65,76 +71,148 @@ enum State {
 #[derive(NativeClass)]
 #[inherit(Node2D)]
 pub struct Tester {
-	time: f64,
+	sequence: Option<SequenceID>,
 	reports: Vec<Report>,
 	frame_count: i64,
 	state: State,
 }
 
 const D_1: f64 = 4.;
-const D_2: f64 = 8.;
+const D_15: f64 = D_1 * 1.5;
+const D_2: f64 = D_1 * 2.0;
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, FromVariant, ToVariant)]
 enum Test {
-	Std,
+	Absolute,
+	SpeedBased,
 	Relative,
 }
 
 impl Test {
 	fn report(&self, tester: &mut Tester, owner: &Node2D, time: f64) {
 		match self {
-			Test::Std => {
-				match time {
-					..=D_1 => {
-						let expected_x = 1000. * time / D_1;
-						let expected_y = -1000. * time / D_1;
-						let expected_color_r = time * 0.5 / D_2;
-						tester.reports.push(Report::generate(owner, time, expected_x, expected_y, expected_color_r));
-					}
-					..=D_2 => {
-						let expected_x = f64::_lerp(&1000., &-500., (time - D_1) / D_1);
-						let expected_y = -1000.;
-						let expected_color_r = time * 0.5 / D_2;
-						tester.reports.push(Report::generate(owner, time, expected_x, expected_y, expected_color_r));
-					}
-					_ => {
-						let expected_x = -500.;
-						let expected_y = -1000.;
-						let expected_color_r = 0.5;
-						tester.reports.push(Report::generate(owner, time, expected_x, expected_y, expected_color_r));
-						tester.state = State::PrintingReports;
-					}
-				}
+			Test::Absolute => {
+				let expected_x = 
+					match time {
+						..=D_1 => {
+							f64::_lerp(&0., &1000., time / D_1)
+						}
+						..=D_2 => {
+							f64::_lerp(&1000., &-500., (time - D_1) / D_1)
+						}
+						_ => -500.
+					};
+				
+				let expected_y =
+					match time {
+						..=D_1 => {
+							f64::_lerp(&0., &-1000., time / D_1)
+						}
+						..=D_15 => {
+							-1000.
+						}
+						..=D_2 => {
+							f64::_lerp(&-1000., &0., (time - D_15) / (D_2 - D_15))
+						}
+						_ => 0.
+					};
+				
+				let expected_color_r =
+					match time {
+						..=D_2 => {
+							f64::_lerp(&0., &0.5, time / D_2)
+						}
+						_ => 0.5
+					};
+				
+				Report::generate(owner, time, expected_x, expected_y, expected_color_r)
+					.map(|report| tester.reports.push(report));
+			}
+			Test::SpeedBased => {
+				let expected_x = 
+					match time {
+						..=10.0 => {
+							f64::step(&0., &1000., 100., time).0
+						}
+						..=19.0 => {
+							f64::step(&1000., &-800., 200., time - 10.).0
+						}
+						_ => -800.
+					};
+				
+				let expected_y = 
+					match time {
+						..=10.0 => {
+							f64::step(&0., &-1000., 100., time).0
+						}
+						..=17.0 => {
+							f64::step(&-1000., &400., 200., time - 10.).0
+						}
+						_ => 400.
+					};
+				
+				let expected_color_r =
+					match time {
+						..=10.0 => {
+							f64::step(&0., &0.5, 0.05, time).0
+						}
+						..=12.0 => {
+							0.5
+						}
+						..=12.5 => {
+							f64::step(&0.5, &0., 1., time - 12.).0
+						}
+						_ => 0.
+					};
+				
+				Report::generate(owner, time, expected_x, expected_y, expected_color_r)
+					.map(|report| tester.reports.push(report));
 			}
 			Test::Relative => {
-				match time {
-					..=D_1 => {
-						let expected_x = 1000. * time / D_1;
-						let expected_y = -1000. * time / D_1;
-						let expected_color_r = time / D_2;
-						tester.reports.push(Report::generate(owner, time, expected_x, expected_y, expected_color_r));
-					}
-					..=D_2 => {
-						let expected_x = 1000. - 500. * (time - D_1) / D_1;
-						let expected_y = -1000.;
-						let expected_color_r = time / D_2;
-						tester.reports.push(Report::generate(owner, time, expected_x, expected_y, expected_color_r));
-					}
-					_ => {
-						let expected_x = 500.;
-						let expected_y = -1000.;
-						let expected_color_r = 1.;
-						tester.reports.push(Report::generate(owner, time, expected_x, expected_y, expected_color_r));
-						tester.state = State::PrintingReports;
-					}
-				}
+				let expected_x = 
+					match time {
+						..=D_1 => {
+							f64::_lerp(&0., &1000., time / D_1)
+						}
+						..=D_2 => {
+							1000. - 500. * (time - D_1) / D_1
+						}
+						_ => 500.
+					};
+				
+				let expected_y = 
+					match time {
+						..=2.0 => {
+							f64::_lerp(&0., &-1000., time / D_1)
+						}
+						..=D_1 => {
+							f64::_lerp(&0., &-1000., time / D_1)
+								+ f64::_lerp(&0., &1500., (time - 2.0) / D_1)
+						}
+						..=const { D_1 + 2.0 } => {
+							-1000. + f64::_lerp(&0., &1500., (time - 2.0) / D_1)
+						}
+						_ => 500.
+					};
+				
+				let expected_color_r =
+					match time {
+						..=D_2 => {
+							f64::_lerp(&0., &1., time / D_2)
+						}
+						_ => 1.
+					};
+				
+				Report::generate(owner, time, expected_x, expected_y, expected_color_r)
+					.map(|report| tester.reports.push(report));
 			}
 		}
 	}
 	
-	fn start(&self, owner: &Node2D) {
+	#[must_use]
+	fn start(&self, owner: &Node2D) -> SequenceID {
 		match self {
-			Test::Std => {
+			Test::Absolute => {
 				owner.do_color_r(0.5, D_2)
 				     .register()
 				     .unwrap();
@@ -142,9 +220,24 @@ impl Test {
 				let mut seq = Sequence::new().bound_to(owner);
 				seq.append(owner.do_move_x(1000.0, D_1));
 				seq.join(owner.do_move_y(-1000.0, D_1));
-				seq.append(owner.do_move_x(-500.0, D_1).lerp_flexible());
+				seq.append(owner.do_move_x(-500.0, D_1));
+				seq.insert(D_15, owner.do_move_y(0., D_1).with_speed_scale(2.));
 				seq.register()
-				   .unwrap();
+				   .unwrap()
+			}
+			Test::SpeedBased => {
+				owner.do_color_r(0.5, 0.)
+				     .as_speed_based(0.05)
+				     .register()
+				     .unwrap();
+
+				let mut seq = Sequence::new().bound_to(owner);
+				seq.append(owner.do_move_x(1000.0, D_1).as_speed_based(100.));
+				seq.join(owner.do_move_y(-1000.0, D_1).as_speed_based(100.));
+				seq.append(owner.do_move(Vector2::new(-800., 400.), D_1).as_speed_based(200.));
+				seq.insert(12.0, owner.do_color_r(0., 0.).as_speed_based(1.));
+				seq.register()
+				   .unwrap()
 			}
 			Test::Relative => {
 				owner.do_color_r(1., D_2)
@@ -154,9 +247,10 @@ impl Test {
 				let mut seq = Sequence::new().bound_to(owner);
 				seq.append(owner.do_move_x(1000.0, D_1));
 				seq.join(owner.do_move_y(-1000.0, D_1));
-				seq.append(owner.do_move_x(-500.0, D_1).lerp_relative());
+				seq.append(owner.do_move_x(-500.0, D_1).as_relative(0.));
+				seq.insert(2.0, owner.do_move_y(1500., D_1).as_relative(0.));
 				seq.register()
-				   .unwrap();
+				   .unwrap()
 			}
 		}
 	}
@@ -166,7 +260,7 @@ impl Test {
 impl Tester {
 	fn new(_owner: &Node2D) -> Self {
 		Self {
-			time: 0.,
+			sequence: None,
 			reports: Vec::new(),
 			frame_count: 1,
 			state: State::Finished,
@@ -183,17 +277,21 @@ impl Tester {
 		
 		buttons.get_node_as::<Button>("std")
 		       .unwrap()
-		       .connect("pressed", owner_ref, fn_name(&Self::_test_std), VariantArray::new_shared(), 0)
+		       .connect("pressed", owner_ref, fn_name(&Self::_start_test), Test::Absolute.to_shared_array(), 0)
+		       .log_if_err();
+
+		buttons.get_node_as::<Button>("speed_based")
+		       .unwrap()
+		       .connect("pressed", owner_ref, fn_name(&Self::_start_test), Test::SpeedBased.to_shared_array(), 0)
 		       .log_if_err();
 		
 		buttons.get_node_as::<Button>("relative")
 		       .unwrap()
-		       .connect("pressed", owner_ref, fn_name(&Self::_test_relative), VariantArray::new_shared(), 0)
+		       .connect("pressed", owner_ref, fn_name(&Self::_start_test), Test::Relative.to_shared_array(), 0)
 		       .log_if_err();
 	}
 	
 	fn reset(&mut self, owner: &Node2D) {
-		self.time = 0.;
 		self.reports.clear();
 		owner.kill_bound_tweens()
 		     .log_if_err();
@@ -203,39 +301,36 @@ impl Tester {
 	}
 
 	#[method]
-	fn _test_std(&mut self, #[base] owner: &Node2D) {
+	fn _start_test(&mut self, #[base] owner: &Node2D, test: Test) {
 		self.reset(owner);
-		self.state = State::Running(Test::Std);
-		Test::Std.start(owner);
-	}
-
-	#[method]
-	fn _test_relative(&mut self, #[base] owner: &Node2D) {
-		self.reset(owner);
-		owner.kill_bound_tweens()
-		     .log_if_err();
-		
-		self.state = State::Running(Test::Relative);
-		Test::Relative.start(owner);
+		self.state = State::Running { test, last_time: None };
+		self.sequence = Some(test.start(owner));
 	}
 	
 	#[method]
-	fn _process(&mut self, #[base] owner: &Node2D, delta: f64) {
-		let time = self.time;
-		self.time += delta;
-		
-		self.frame_count -= 1;
-		if self.frame_count > 0 {
-			return;
-		}
-
-		self.frame_count = 30;
-		
-		match self.state {
-			State::Running(test) => {
-				test.report(self, owner, time);
+	fn _process(&mut self, #[base] owner: &Node2D, _delta: f64) {
+		match &mut self.state {
+			State::Running { test, last_time } => {
+				if let Some(time) = last_time.take() {
+					let test = *test;
+					test.report(self, owner, time);
+				} else if let Some(time) =
+					self.sequence.as_ref()
+						.map(|id| { 
+							id.map(|seq| seq.total_elapsed_time).ok() 
+						}).flatten() {
+					*last_time = Some(time);
+				} else {
+					godot_print!("Sequence ended, printing reports!");
+					self.state = State::PrintingReports;
+				}
 			},
 			State::PrintingReports => {
+				self.frame_count -= 1;
+				if self.frame_count > 0 {
+					return;
+				}
+				
 				let count = usize::clamp(self.reports.len(), 0, 5);
 				if count <= 0 {
 					self.state = State::Finished;
@@ -243,7 +338,7 @@ impl Tester {
 				}
 				
 				self.frame_count = 120;
-
+				
 				let to_print =
 					self.reports
 					    .drain(..count)

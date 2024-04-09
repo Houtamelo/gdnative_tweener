@@ -8,6 +8,10 @@ macro_rules! base_impl {
 			pub fn bound_to(self, node: &impl Inherits<Node>) -> Self {
 				Self { bound_node: Some(unsafe { node.base() }), ..self }
 			}
+			
+			pub fn unbound(self) -> Self {
+				Self { bound_node: None, ..self }
+			}
 		    
 		    pub fn with_delay(self, delay: f64) -> Self { 
 			    Self { delay, ..self }
@@ -38,8 +42,8 @@ macro_rules! base_impl {
 			}
 		    
 		    pub fn when_finished(mut self, 
-								 method: impl Into<GodotString>,
 								 target: &impl Inherits<Object>,
+								 method: impl Into<GodotString>,
 								 args: Vec<Variant>)
 								 -> Self {
 				let callback = Callback {
@@ -72,24 +76,20 @@ macro_rules! base_impl {
 			fn pause_mode(&self) -> TweenPauseMode { self.pause_mode }
 			fn bound_node(&self) -> Option<&Ref<Node>> { self.bound_node.as_ref() }
 			fn loop_mode(&self) -> LoopMode { self.loop_mode }
-			fn cycle_duration(&self) -> f64 { self.cycle_duration_internal() }
 			fn delay(&self) -> f64 { self.delay }
 			
 			fn elapsed_time(&self) -> f64 { self.elapsed_time }
 			fn speed_scale(&self) -> f64 { self.speed_scale }
 		
-			fn advance_time(&mut self, delta_time: f64) -> f64 {
-				self.elapsed_time += delta_time * self.speed_scale;
-				self.check_elapsed_time()
+			fn advance_time(&mut self, delta_time: f64) -> Option<f64> {
+				match self.advance_time_internal(delta_time) {
+					Ok(excess) => excess,
+					Err(err) => {
+						godot_error!("{err}");
+						Some(delta_time)
+					}
+				}
 			}
-		
-			/*
-			fn seek(&mut self, time: f64) {
-				self.elapsed_time = time;
-				self.check_elapsed_time();
-			}
-			*/
-			
 		
 			fn callbacks_on_finish(&self) -> &[Callback] { &self.do_on_finish }
 		
@@ -97,10 +97,7 @@ macro_rules! base_impl {
 				match self.state() {
 					| State::Playing
 					| State::Paused => {
-						self.update_value(1.)
-						    .log_if_err();
-		
-						self.on_finish();
+						self.seek_end();
 					}
 					State::Stopped => {}
 				}

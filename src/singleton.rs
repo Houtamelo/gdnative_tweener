@@ -41,7 +41,9 @@ lazy_static! {
 
 #[methods]
 impl TweensController {
-	fn new(_owner: &Node) -> Self {
+	fn new(owner: &Node) -> Self {
+		owner.set_process_priority(-10);
+		
 		Self {
 			tweens: HashMap::new(),
 			sequences: HashMap::new(),
@@ -140,6 +142,14 @@ impl TweensController {
 		self.tweens.get_mut(&id)
 	}
 	
+	pub fn get_sequence(&self, id: ID) -> Option<&Sequence> {
+		self.sequences.get(&id)
+	}
+	
+	pub fn get_sequence_mut(&mut self, id: ID) -> Option<&mut Sequence> {
+		self.sequences.get_mut(&id)
+	}
+	
 	pub fn claim_tween(&mut self, id: ID) -> Option<AnyTween> {
 		self.tweens.remove(&id)
 	}
@@ -193,24 +203,20 @@ impl TweensController {
 	}
 	
 	pub fn register_tween<T: Tick + FromTween>(&mut self, tween: impl Into<AnyTween>) -> TweenID<T> {
-		loop {
-			let rc = Rc::new(());
-			let id = ID(Rc::clone(&rc));
-			self.tweens.insert(id, tween.into());
-			
-			let weak_id = WeakID(Rc::downgrade(&rc));
-			return TweenID::new(weak_id);
-		}
+		let rc = Rc::new(());
+		let id = ID(Rc::clone(&rc));
+		self.tweens.insert(id, tween.into());
+		
+		let weak_id = WeakID(Rc::downgrade(&rc));
+		return TweenID::new(weak_id);
 	} 
 	
 	pub fn register_sequence(&mut self, sequence: Sequence) -> SequenceID {
-		loop {
-			let rc = Rc::new(());
-			let id = ID(Rc::clone(&rc));
-			self.sequences.insert(id, sequence);
-			
-			let weak_id = WeakID(Rc::downgrade(&rc));
-			return SequenceID(weak_id);
-		}
+		let rc = Rc::new(());
+		let id = ID(Rc::clone(&rc));
+		self.sequences.insert(id, sequence);
+		
+		let weak_id = WeakID(Rc::downgrade(&rc));
+		return SequenceID(weak_id);
 	}
 }

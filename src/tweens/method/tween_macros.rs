@@ -20,6 +20,7 @@ macro_rules! method_def {
 			pub start: $value_ty,
 			pub end: $value_ty,
 			pub do_on_finish: Vec<Callback>,
+			lerp_fn: fn(from: &$value_ty, to: &$value_ty, f64) -> $value_ty,
 		}
 	};
 }
@@ -55,6 +56,7 @@ macro_rules! method_register {
 					start: start.clone(),
 					end,
 					do_on_finish: Vec::new(),
+					lerp_fn: <$value_ty>::_lerp,
 				}
 			}
 		
@@ -82,7 +84,7 @@ macro_rules! method_register {
 }
 
 macro_rules! method_impl {
-    ($value_ty: ty, $struct_ty: ident, $struct_enum: ident  $(, $lerp_fn: expr)?) => {
+    ($value_ty: ty, $struct_ty: ident, $struct_enum: ident) => {
 	    impl FromTween for $struct_ty {
 			fn from_tween(tween: &AnyTween) -> Option<&Self> {
 				if let AnyTween::Method(TweenMethod::$struct_enum(t)) = tween {
@@ -108,26 +110,85 @@ macro_rules! method_impl {
 	    }
 	    
 	    impl $struct_ty {
+		    pub fn starting_at(self, value: $value_ty) -> Self { 
+				Self { start: value, ..self }
+			}
+		    
+		    pub fn with_duration(self, duration: f64) -> Self { 
+			    Self { duration, ..self }
+			}
+		    
 		    pub(crate) fn set_state_internal(&mut self, state: State) {
 			    self.state = state;
 		    }
 		    
-		    $(
-		    fn update_value(&mut self, t: f64) -> Result<()> {
-				let percent = self.ease.sample(t);
-				let target_value = $lerp_fn(&self.start, &self.end, percent);
+		    fn seek_end(&mut self) {
+			    let target_value = {
+				    let eased_ratio = self.ease.sample(1.);
+				    (self.lerp_fn)(&self.start, &self.end, eased_ratio)
+			    };
+			    
+			    let Some(target) = (unsafe { self.target.assume_safe_if_sane() })
+				    else {
+				        self.on_finish();
+				        return godot_error!("Cannot call method `{}`, target is not sane", self.method)
+			        };
+			    
+			    unsafe { target.call_deferred(self.method.new_ref(), &[target_value.to_variant()]) };
+			    self.on_finish();
+		    }
+		    
+		    fn advance_time_internal(&mut self, delta_time: f64) -> Result<Option<f64>> {
+			    self.elapsed_time += delta_time * self.speed_scale;
+			    
+				let target_value = {
+					let eased_ratio = { 
+						let elapsed_ratio = ratio_with_delay_duration(self.delay, self.duration, self.elapsed_time);
+						self.ease.sample(elapsed_ratio)
+					};
+					
+					(self.lerp_fn)(&self.start, &self.end, eased_ratio)
+				};
 				
-				match unsafe { self.target.assume_safe_if_sane() } {
-					Some(target) => {
-						unsafe { target.call_deferred(self.method.new_ref(), &[target_value.to_variant()]) };
-					}
-					None => {
-						bail!("Can not invoke `{}`, target is not sane.", self.method);
-					}
-				}
+				let excess_time = {
+					let total_duration = self.delay + self.duration;
+					let excess = self.elapsed_time - total_duration;
+					(excess > 0.).then_some(excess)
+				};
+			    
+			    unsafe { 
+				    self.target
+				        .assume_safe_if_sane()
+				        .ok_or_else(|| anyhow!("Cannot call method `{}`, target is not sane", self.method))?
+				        .call_deferred(self.method.new_ref(), &[target_value.to_variant()]);
+			    }
+			    
+			    let final_excess_time = 
+					match excess_time {
+						Some(excess) => {
+							self.cycle_count += 1;
+						
+							match &mut self.loop_mode {
+								LoopMode::Infinite => {
+									self.elapsed_time = self.delay + excess;
+									None
+								}
+								LoopMode::Finite(loop_count) => { 
+									if self.cycle_count < *loop_count { 
+										self.elapsed_time = self.delay + excess;
+										None 
+									} else {
+										self.elapsed_time -= excess;
+										Some(excess)
+									}
+								}
+							}
+						}
+						None => None,
+					};
 				
-				Ok(())
-			})?
+				Ok(final_excess_time.inspect(|_| self.on_finish()))
+			}
 	    }
     };
 }
@@ -137,3 +198,4 @@ pub(crate) use {
 	method_register,
 	method_impl,
 };
+use crate::prelude::ratio_with_delay_duration;

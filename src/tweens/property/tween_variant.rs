@@ -12,32 +12,33 @@ pub struct TweenProperty_Variant {
 	pub bound_node: Option<Ref<Node>>,
 	pub state: State,
 	pub delay: f64,
-	pub duration: f64,
 	pub ease: Ease,
 	pub speed_scale: f64,
 	pub elapsed_time: f64,
 	pub cycle_count: u32,
 	pub pause_mode: TweenPauseMode,
 	pub process_mode: TweenProcessMode,
-	loop_mode: LoopMode,
-	pub start: Variant,
+	pub loop_mode: LoopMode,
 	pub end: Variant,
-	lerp_mode: LerpMode<Variant>,
+	pub lerp_mode: LerpMode<Variant>,
 	pub do_on_finish: Vec<Callback>,
 	lerp_fn: fn(from: &Variant, to: &Variant, f64) -> Variant,
 	relative_fn: fn(value_at_obj: &Variant, previous_calc: &Variant, next_calc: &Variant) -> Variant,
+	step_fn: fn(from: &Variant, to: &Variant, speed: f64, t: f64) -> (Variant, StepResult),
+	distance_fn: fn(from: &Variant, to: &Variant) -> f64,
 }
 
 impl TweenProperty_Variant {
-	pub fn new<T: _Lerp + FromVariant + ToVariant + Clone + Copy>(
+	pub fn new<T: _Lerp + FromVariant + ToVariant + Clone>(
 		property: impl Into<GodotString>,
 		target: &impl Inherits<Object>,
-		start: T,
 		end: T,
 		duration: f64,
 		auto_play: AutoPlay,
 		lerp_fn: fn(from: &Variant, to: &Variant, f64) -> Variant,
-		relative_fn: fn(value_at_obj: &Variant, previous_calc: &Variant, next_calc: &Variant) -> Variant)
+		relative_fn: fn(value_at_obj: &Variant, previous_calc: &Variant, next_calc: &Variant) -> Variant,
+		step_fn: fn(from: &Variant, to: &Variant, speed: f64, t: f64) -> (Variant, StepResult),
+		distance_fn: fn(from: &Variant, to: &Variant) -> f64)
 		-> Self {
 		Self {
 			property: property.into(),
@@ -48,7 +49,6 @@ impl TweenProperty_Variant {
 				false => State::Paused,
 			},
 			delay: 0.,
-			duration,
 			ease: Ease::Linear,
 			speed_scale: 1.,
 			elapsed_time: 0.,
@@ -56,89 +56,38 @@ impl TweenProperty_Variant {
 			pause_mode: TweenPauseMode::STOP,
 			process_mode: TweenProcessMode::IDLE,
 			loop_mode: LoopMode::Finite(0),
-			lerp_mode: LerpMode::Absolute,
-			start: start.to_variant(),
+			lerp_mode: LerpMode::Absolute { duration, start: None },
 			end: end.to_variant(),
 			do_on_finish: Vec::new(),
 			lerp_fn,
 			relative_fn,
+			step_fn,
+			distance_fn,
 		}
 	}
 
-	pub fn new_registered<T: _Lerp + FromVariant + ToVariant + Clone + Copy>(
+	pub fn new_registered<T: _Lerp + FromVariant + ToVariant + Clone>(
 		property: impl Into<GodotString>,
 		target: &impl Inherits<Object>,
-		start: T,
 		end: T,
 		duration: f64,
 		auto_play: AutoPlay,
 		lerp_fn: fn(from: &Variant, to: &Variant, f64) -> Variant,
-		relative_fn: fn(value_at_obj: &Variant, previous_calc: &Variant, next_calc: &Variant) -> Variant)
+		relative_fn: fn(value_at_obj: &Variant, previous_calc: &Variant, next_calc: &Variant) -> Variant,
+		step_fn: fn(from: &Variant, to: &Variant, speed: f64, t: f64) -> (Variant, StepResult),
+		distance_fn: fn(from: &Variant, to: &Variant) -> f64)
 		-> Result<TweenID<TweenProperty_Variant>> {
-		Self::new(property, target, start, end, duration, auto_play, lerp_fn, relative_fn)
+		Self::new(property, target, end, duration, auto_play, lerp_fn, relative_fn, step_fn, distance_fn)
 			.register::<T>()
 	}
 
-	pub fn register<T: _Lerp + FromVariant + ToVariant + Clone + Copy>(self) 
+	pub fn register<T: _Lerp + FromVariant + ToVariant + Clone>(self) 
 		-> Result<TweenID<TweenProperty_Variant>> { 
 		let singleton = 
 			&mut TweensController::singleton().try_borrow_mut() ?;
 		
 		let id = singleton.register_tween::<TweenProperty_Variant>(TweenProperty::Variant(self));
 		Ok(id)
-	}
-
-	pub fn lerp_relative(mut self) -> Self {
-		match self.lerp_mode {
-			| LerpMode::Flexible{..} 
-			| LerpMode::Absolute => {
-				let ratio = self.elapsed_ratio();
-				
-				self.lerp_mode = LerpMode::Relative {
-					previous_value: (self.lerp_fn)(&self.start, &self.end, ratio)
-				};
-			}
-			LerpMode::Relative { .. } => {},
-		};
-
-		self
-	}
-	
-	fn update_value(&mut self, t: f64) -> Result<()> {
-		let Some(target) = (unsafe { self.target.assume_safe_if_sane() }) 
-			else { bail!("Can not set property `{}` on Object, target is not sane.", self.property) };
-		
-		let value_at_obj = target.get_indexed(self.property.new_ref());
-		
-		let ratio = self.ease.sample(t);
-
-		let target_value =
-			match &mut self.lerp_mode {
-				LerpMode::Flexible { starting_ratio } => {
-					let actual_ratio = actual_ratio(*starting_ratio, ratio);
-					(self.lerp_fn)(&self.start, &self.end, actual_ratio)
-				},
-				LerpMode::Relative { previous_value } => {
-					let next_value = (self.lerp_fn)(&self.start, &self.end, ratio);
-					let target_value = (self.relative_fn)(&value_at_obj, &previous_value, &next_value);
-					*previous_value = next_value;
-					target_value
-				},
-				LerpMode::Absolute => {
-					(self.lerp_fn)(&self.start, &self.end, ratio)
-				},
-			};
-
-		unsafe { match self.target.assume_safe_if_sane() {
-			Some(target) => {
-				target.call_deferred("set_indexed", &[self.property.to_variant(), target_value.to_variant()]);
-			}
-			None => {
-				bail!("Can not set property `{}` on Object, target is not sane.", self.property);
-			}
-		} }
-		
-		Ok(())
 	}
 }
 

@@ -1,4 +1,3 @@
-use gdnative::core_types::CoerceFromVariant;
 #[allow(unused_imports)]
 use crate::*;
 
@@ -23,30 +22,9 @@ macro_rules! do_property_impl {
 			               duration: f64)
 			               -> Self::Tween {
 				let property = property.into();
+				let tween = <$tween>::new(property, self, end_val, duration, AutoPlay(true));
 				
-				let obj_ref = unsafe { self.base() };
-				let obj = unsafe { obj_ref.assume_safe() };
-				let variant = obj.get_indexed(property.new_ref());
-				let val_result = 
-					variant.try_to::<$val>()
-						   .map_err(|err| anyhow!(
-								"Object `{obj:?}` returned invalid value for property `{property}` \n\
-								 Value: `{variant:?}` \n\
-								 Expected: `{}` \n\
-								 Error: {err:?}", type_name::<$val>()));
-				
-				let start_val = 
-					match val_result {
-						Err(err) => {
-							godot_error!("Tween will not work properly.\n Error: {err}");
-							variant.coerce_to()
-						}
-						Ok(val) => val,
-					};
-				
-				let tween = <$tween>::new(property, self, start_val, end_val, duration, AutoPlay(true));
-				
-				if let Some(node) = obj.cast::<Node>() {
+				if let Some(node) = (unsafe { self.base().assume_safe_if_sane().map(|obj| obj.cast::<Node>()).flatten() }) {
 					tween.bound_to(&node)
 				} else {
 					tween
@@ -64,7 +42,7 @@ do_property_impl!(Vector2, TweenProperty_Vector2);
 do_property_impl!(Vector3, TweenProperty_Vector3);
 
 pub trait DoPropertyVariant {
-	fn do_property_var<Val: _Lerp + FromVariant + ToVariant + Clone + Copy + CoerceFromVariant>(
+	fn do_property_var<Val: _Lerp + FromVariant + ToVariant + Clone>(
 		&self,
 		property: impl Into<GodotString>,
 		end_val: Val,
@@ -73,7 +51,7 @@ pub trait DoPropertyVariant {
 }
 
 impl<T: Inherits<Object>> DoPropertyVariant for T  {
-	fn do_property_var<Val: _Lerp + FromVariant + ToVariant + Clone + Copy + CoerceFromVariant>(
+	fn do_property_var<Val: _Lerp + FromVariant + ToVariant + Clone>(
 		&self,
 		property: impl Into<GodotString>,
 		end_val: Val, 
@@ -92,33 +70,26 @@ impl<T: Inherits<Object>> DoPropertyVariant for T  {
 			Val::add_relative(&value_at_obj, &previous_calc, &next_calc).to_variant()
 		};
 		
+		let step_fn = |from: &Variant, to: &Variant, speed: f64, t: f64| -> (Variant, StepResult) {
+			let from = from.to::<Val>().unwrap();
+			let to = to.to::<Val>().unwrap();
+			let (val, step_result) = Val::step(&from, &to, speed, t);
+			(val.to_variant(), step_result)
+		};
+		
+		let distance_fn = |from: &Variant, to: &Variant| -> f64 {
+			let from = from.to::<Val>().unwrap();
+			let to = to.to::<Val>().unwrap();
+			Val::distance(&from, &to)
+		};
+		
 		let property = property.into();
 
-		let obj_ref = unsafe { self.base() };
-		let obj = unsafe { obj_ref.assume_safe() };
-		let variant = obj.get_indexed(property.new_ref());
-		
-		let val_result = 
-			variant.try_to::<Val>()
-				   .map_err(|err| anyhow!(
-					   "Object `{obj:?}` returned invalid value for property `{property}` \n\
-					    Value: `{variant:?}` \n\
-						Expected: `{}` \n\
-					    Error: {err:?}", type_name::<Val>()));
-		
-		let start_val = 
-			match val_result {
-				Err(err) => {
-					godot_error!("Tween will not work properly.\n Error: {err}");
-					variant.coerce_to()
-				}
-				Ok(val) => val,
-			};
-
 		let tween = TweenProperty_Variant::new(
-			property, self, start_val, end_val, duration, AutoPlay(true), lerp_fn, relative_fn);
+			property, self, end_val, duration, AutoPlay(true), 
+			lerp_fn, relative_fn, step_fn, distance_fn);
 
-		if let Some(node) = obj.cast::<Node>() {
+		if let Some(node) = unsafe { self.base().assume_safe_if_sane().map(|obj| obj.cast::<Node>()).flatten() } {
 			tween.bound_to(&node)
 		} else {
 			tween

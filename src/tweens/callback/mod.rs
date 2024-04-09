@@ -18,7 +18,7 @@ pub struct TweenCallback {
 }
 
 impl TweenCallback {
-	pub fn new(method: impl Into<GodotString>,
+	pub fn new(fn_name: impl Into<GodotString>,
 	           target: &impl Inherits<Object>,
 	           args: Vec<Variant>,
 	           delay: f64,
@@ -26,7 +26,7 @@ impl TweenCallback {
 	           -> Self {
 		Self {
 			callback: Callback {
-				method: method.into(),
+				method: fn_name.into(),
 				target: unsafe { target.base() },
 				args,
 			},
@@ -46,13 +46,13 @@ impl TweenCallback {
 		}
 	}
 
-	pub fn new_registered(method: impl Into<GodotString>,
+	pub fn new_registered(fn_name: impl Into<GodotString>,
 	                      target: &impl Inherits<Object>,
 	                      args: Vec<Variant>,
 	                      delay: f64,
 	                      auto_play: AutoPlay)
 	                      -> Result<TweenID<TweenCallback>> {
-		Self::new(method, target, args, delay, auto_play)
+		Self::new(fn_name, target, args, delay, auto_play)
 			.register()
 	}
 
@@ -63,48 +63,44 @@ impl TweenCallback {
 		let id = singleton.register_tween::<TweenCallback>(self);
 		Ok(id)
 	}
-
-	fn cycle_duration_internal(&self) -> f64 {
-		self.delay
-	}
 }
 
 impl TweenCallback {
 	pub fn method(&self) -> &GodotString { &self.callback.method }
 	pub fn target(&self) -> Ref<Object> { self.callback.target }
 	pub fn args(&self) -> &[Variant] { &self.callback.args }
+	
+	fn seek_end(&mut self) {
+		unsafe { self.callback.invoke().log_if_err() };
+		self.on_finish();
+	}
 
-	fn check_elapsed_time(&mut self) -> f64 {
+	fn advance_time_internal(&mut self, delta_time: f64) -> Result<Option<f64>> {
+		self.elapsed_time += delta_time * self.speed_scale;
+		
 		let excess = self.elapsed_time - self.delay;
-		if excess > 0. {
-			return 0.;
+		if excess <= 0. {
+			return Ok(None);
 		}
 
 		unsafe { self.callback.invoke().log_if_err() };
+		
 		self.cycle_count += 1;
-		self.elapsed_time = f64::max(0., self.elapsed_time - self.delay);
+		self.elapsed_time = excess;
 
 		match &mut self.loop_mode {
 			LoopMode::Infinite => {
-				0.
+				Ok(None)
 			},
 			LoopMode::Finite(loop_count) => {
 				if self.cycle_count >= *loop_count {
 					self.on_finish();
 					self.elapsed_time = self.delay;
-					excess
+					Ok(Some(excess))
 				} else {
-					0.
+					Ok(None)
 				}
 			}
-		}
-	}
-	
-	fn update_value(&mut self, t: f64) -> Result<()> {
-		if t >= 1. {
-			unsafe { self.callback.invoke() }
-		} else {
-			Ok(())
 		}
 	}
 	
