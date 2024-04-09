@@ -26,4 +26,5 @@ inline_format = "0.2"
 enum_dispatch = "0.3"
 
 [features]
+default = []
 integration_tests = []
