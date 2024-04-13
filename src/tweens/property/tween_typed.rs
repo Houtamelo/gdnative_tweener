@@ -4,7 +4,6 @@ use crate::*;
 use crate::tweens::tween_base_macro::base_impl;
 use crate::tweens::tween_value_macro::value_impl;
 use super::tween_macros::*;
-use crate::tweens::property::LerpMode;
 
 property_def!(i64, TweenProperty_i64);
 property_register!(i64, TweenProperty_i64);

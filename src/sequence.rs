@@ -61,6 +61,7 @@ pub struct Sequence {
 #[derive(Debug)]
 pub enum ForkElement {
 	Tween(AnyTween),
+	Sequence(Sequence),
 	Callback { invoked: bool, callback: Callback },
 	Interval { total_time: f64, elapsed_time: f64 },
 }
@@ -74,6 +75,7 @@ impl From<AnyTween> for ForkElement {
 #[derive(Debug)]
 pub enum InsertedElement {
 	Tween(AnyTween),
+	Sequence(Sequence),
 	Callback { invoked: bool, callback: Callback },
 }
 
@@ -124,6 +126,20 @@ impl Sequence {
 		self.queue.push(vec![tween.into()]);
 	}
 	
+	pub fn append_sequence(&mut self, mut sequence: Sequence) {
+		match self.state {
+			| State::Playing
+			| State::Paused => {
+				sequence.pause();
+			}
+			State::Stopped => {
+				sequence.stop();
+			}
+		}
+		
+		self.queue.push(vec![ForkElement::Sequence(sequence)]);
+	}
+	
 	pub fn append_call(&mut self, f: impl Fn() + 'static) {
 		let callback = Callback::Closure(Box::new(f));
 		self.queue.push(vec![ForkElement::Callback { invoked: false, callback }]);
@@ -164,6 +180,24 @@ impl Sequence {
 			back.push(tween.into());
 		} else {
 			self.append(tween);
+		}
+	}
+	
+	pub fn join_sequence(&mut self, mut sequence: Sequence) {
+		match self.state {
+			| State::Playing
+			| State::Paused => {
+				sequence.pause();
+			}
+			State::Stopped => {
+				sequence.stop();
+			}
+		}
+		
+		if let Some(back) = self.queue.last_mut() {
+			back.push(ForkElement::Sequence(sequence));
+		} else {
+			self.queue.push(vec![ForkElement::Sequence(sequence)]);
 		}
 	}
 	
@@ -209,6 +243,20 @@ impl Sequence {
 		}
 		
 		self.inserteds.push((time, tween.into()));
+	}
+	
+	pub fn insert_sequence(&mut self, time: f64, mut sequence: Sequence) {
+		match self.state {
+			| State::Playing
+			| State::Paused => {
+				sequence.pause();
+			}
+			State::Stopped => {
+				sequence.stop();
+			}
+		}
+		
+		self.inserteds.push((time, InsertedElement::Sequence(sequence)));
 	}
 	
 	pub fn insert_call(&mut self, time: f64, f: impl Fn() + 'static) {
@@ -294,6 +342,8 @@ impl Sequence {
 			return;
 		}
 		
+		let from_begin = self.state == State::Stopped;
+		
 		self.state = State::Playing;
 
 		self.queue
@@ -302,14 +352,30 @@ impl Sequence {
 		    .for_each(|fork_element| {
 			    match fork_element {
 				    ForkElement::Tween(tween) => {
-					    tween.stop();
-					    tween.pause();
+					    if from_begin {
+						    tween.stop();
+						    tween.pause();
+					    } else {
+						    tween.pause();
+					    }
+				    }
+				    ForkElement::Sequence(seq) => {
+					    if from_begin {
+						    seq.stop();
+						    seq.pause();
+					    } else {
+						    seq.pause();
+					    }
 				    }
 				    ForkElement::Callback { invoked, .. } => {
-					    *invoked = false;
+					    if from_begin {
+						    *invoked = false;
+					    }
 				    }
 				    ForkElement::Interval { elapsed_time, .. } => {
-					    *elapsed_time = 0.;
+					    if from_begin {
+						    *elapsed_time = 0.;
+					    }
 				    }
 			    }
 		    });
@@ -319,48 +385,32 @@ impl Sequence {
 		    .for_each(|(_, inserted_element)| {
 			    match inserted_element {
 				    InsertedElement::Tween(tween) => {
-					    tween.stop();
-					    tween.pause();
+					    if from_begin {
+						    tween.stop();
+						    tween.pause();
+					    } else {
+						    tween.pause();
+					    }
+				    }
+				    InsertedElement::Sequence(seq) => {
+					    if from_begin {
+						    seq.stop();
+						    seq.pause();
+					    } else {
+						    seq.pause();
+					    }
 				    }
 				    InsertedElement::Callback { invoked, .. } => {
-					    *invoked = false;
+					    if from_begin {
+						    *invoked = false;
+					    }
 				    }
 			    }
 		    });
 	}
 	
 	pub fn pause(&mut self) {
-		if self.state == State::Paused {
-			return;
-		}
-
-		self.queue
-		    .iter_mut()
-		    .flat_map(|vec| vec.iter_mut())
-		    .for_each(|fork_element| {
-			    match fork_element {
-				    ForkElement::Tween(tween) => {
-					    if tween.is_playing() {
-						    tween.pause();
-					    }
-				    }
-				    ForkElement::Callback { .. } => {}
-				    ForkElement::Interval { .. } => {}
-			    }
-		    });
-
-		self.inserteds
-		    .iter_mut()
-		    .for_each(|(_, inserted_element)| {
-			    match inserted_element {
-				    InsertedElement::Tween(tween) => {
-					    if tween.is_playing() {
-						    tween.pause();
-					    }
-				    }
-				    InsertedElement::Callback { .. } => {}
-			    }
-		    });
+		self.state = State::Paused;
 	}
 
 	pub fn stop(&mut self) {
@@ -379,6 +429,9 @@ impl Sequence {
 					ForkElement::Tween(tween) => {
 						tween.stop();
 					}
+					ForkElement::Sequence(seq) => {
+						seq.stop();
+					}
 					ForkElement::Callback { invoked, .. } => {
 						*invoked = false;
 					}
@@ -395,6 +448,9 @@ impl Sequence {
 					InsertedElement::Tween(tween) => {
 						tween.stop();
 					}
+					InsertedElement::Sequence(seq) => {
+						seq.stop();
+					}
 					InsertedElement::Callback { invoked, .. } => {
 						*invoked = false;
 					}
@@ -402,7 +458,7 @@ impl Sequence {
 			});
 	}
 
-	pub fn advance_time(&mut self, delta_time: f64) {
+	pub fn advance_time(&mut self, delta_time: f64) -> Option<f64> {
 		let delta_time = delta_time * self.speed_scale;
 		self.total_elapsed_time += delta_time;
 		
@@ -418,6 +474,21 @@ impl Sequence {
 								let above_at = self.total_elapsed_time - *at;
 								tween.play();
 								tween.advance_time(above_at);
+							}
+						}
+						State::Stopped => {}
+					}
+				}
+				InsertedElement::Sequence(seq) => {
+					match seq.state {
+						State::Playing => {
+							seq.advance_time(delta_time);
+						}
+						State::Paused => {
+							if *at <= self.total_elapsed_time {
+								let above_at = self.total_elapsed_time - *at;
+								seq.play();
+								seq.advance_time(above_at);
 							}
 						}
 						State::Stopped => {}
@@ -452,6 +523,18 @@ impl Sequence {
 								    State::Stopped => Some(remaining_delta),
 							    }
 						    }
+						    ForkElement::Sequence(seq) => {
+							    match seq.state {
+								    State::Playing => {
+									    seq.advance_time(remaining_delta)
+								    }
+								    State::Paused => {
+									    seq.play();
+									    seq.advance_time(remaining_delta)
+								    }
+								    State::Stopped => Some(remaining_delta),
+							    }
+						    }
 						    ForkElement::Callback { invoked, callback } => {
 							    if *invoked == false {
 								    *invoked = true;
@@ -472,7 +555,9 @@ impl Sequence {
 		
 		if remaining_delta > 0. {
 			self.on_finish();
-		} 
+		}
+		
+		(remaining_delta > 0.).then_some(remaining_delta)
 	}
 
 	pub fn force_finish(mut self) {
@@ -484,6 +569,9 @@ impl Sequence {
 						match fork_element {
 							ForkElement::Tween(tween) => {
 								tween.force_finish();
+							}
+							ForkElement::Sequence(seq) => {
+								seq.force_finish();
 							}
 							ForkElement::Callback { invoked, callback } => {
 								if invoked == false {
@@ -501,6 +589,9 @@ impl Sequence {
 				match inserted_element {
 					InsertedElement::Tween(tween) => {
 						tween.force_finish()
+					}
+					InsertedElement::Sequence(seq) => {
+						seq.force_finish()
 					}
 					InsertedElement::Callback { invoked, callback } => {
 						if invoked == false {

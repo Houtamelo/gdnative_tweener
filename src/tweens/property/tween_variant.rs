@@ -1,6 +1,5 @@
 #[allow(unused_imports)]
 use crate::*;
-use crate::tweens::property::LerpMode;
 use crate::tweens::tween_base_macro::base_impl;
 use crate::tweens::tween_value_macro::value_impl;
 use crate::tweens::property::tween_macros::property_impl;

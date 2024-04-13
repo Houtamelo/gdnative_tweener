@@ -1,6 +1,5 @@
 #![feature(let_chains)]
 #![feature(result_flattening)]
-#![feature(associated_type_bounds)]
 #![feature(hash_extract_if)]
 #![feature(trivial_bounds)]
 #![feature(slice_take)]
@@ -9,7 +8,6 @@
 #![feature(inline_const_pat)]
 #![feature(inline_const)]
 #![allow(non_camel_case_types)]
-#![allow(suspicious_auto_trait_impls)]
 
 mod property;
 mod sequence;
