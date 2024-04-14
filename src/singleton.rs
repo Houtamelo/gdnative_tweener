@@ -157,6 +157,10 @@ impl TweensController {
 	pub fn kill_tween(&mut self, id: ID) {
 		self.tweens.remove(&id);
 	}
+
+	pub fn kill_sequence(&mut self, id: ID) {
+		self.sequences.remove(&id);
+	}
 	
 	pub fn kill_boundeds(&mut self, bound_node: Ref<Node>) {
 		self.tweens

@@ -27,7 +27,13 @@ impl<T: Tick + FromTween> TweenID<T> {
 	pub fn is_valid(&self) -> bool {
 		TweensController::singleton()
 			.try_borrow()
-			.is_ok()
+			.is_ok_and(|brain| {
+				let weak = self.0.clone();
+				weak.0.upgrade()
+					.is_some_and(|id| { 
+					brain.get_tween(ID(id)).is_some()
+				})
+			})
 	}
 
 	pub fn kill(&self) -> Result<()> {
@@ -38,7 +44,7 @@ impl<T: Tick + FromTween> TweenID<T> {
 		
 		let brain =
 			&mut TweensController::singleton().try_borrow_mut()?;
-
+		
 		brain.kill_tween(ID(id));
 		Ok(())
 	}
@@ -51,7 +57,7 @@ impl<T: Tick + FromTween> TweenID<T> {
 		
 		let brain =
 			&mut TweensController::singleton().try_borrow_mut()?;
-
+		
 		unsafe { brain.complete_tween(ID(id)) };
 		Ok(())
 	}

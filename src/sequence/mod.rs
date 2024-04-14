@@ -1,47 +1,8 @@
+pub mod id;
+pub use id::*;
+
 #[allow(unused_imports)]
 use crate::*;
-use std::fmt::{Display, Formatter};
-use crate::id::{ID, WeakID};
-
-#[derive(Debug, Clone)]
-#[repr(transparent)]
-pub struct SequenceID(pub WeakID);
-
-impl SequenceID {
-	pub fn map<TMap>(&self, f: impl FnOnce(&Sequence) -> TMap) -> Result<TMap> {
-		let id =
-			Weak::upgrade(&self.0.0)
-				.ok_or_else(|| anyhow!(
-					"Tween with id `{}` no longer exists.", self))?;
-
-		let brain =
-			TweensController::singleton().try_borrow()?;
-
-		brain.get_sequence(ID(id))
-		     .ok_or_else(|| anyhow!("Tween with id `{}` no longer exists.", * self ))
-		     .map(f)
-	}
-
-	pub fn map_mut<TMap>(&self, f: impl FnOnce(&mut Sequence) -> TMap) -> Result<TMap> {
-		let id =
-			Weak::upgrade(&self.0.0)
-				.ok_or_else(|| anyhow!(
-					"Tween with id `{}` no longer exists.", self))?;
-
-		let brain =
-			&mut TweensController::singleton().try_borrow_mut()?;
-
-		brain.get_sequence_mut(ID(id))
-		     .ok_or_else(|| anyhow!("Tween with id `{}` no longer exists.", * self ))
-		     .map(f)
-	}
-}
-
-impl Display for SequenceID {
-	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-		write!(f, "SequenceID({:?})", self.0)
-	}
-}
 
 #[derive(Debug)]
 pub struct Sequence {
@@ -149,7 +110,8 @@ impl Sequence {
 		&mut self,
 		target: &impl Inherits<Object>,
 		method: impl Into<GodotString>,
-		args: Vec<Variant>) {
+		args: Vec<Variant>,
+	) {
 		let callback = Callback::GodotMethodCall(GodotMethodCall {
 			target: unsafe { target.base() },
 			method: method.into(),
