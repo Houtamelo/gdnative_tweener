@@ -163,6 +163,21 @@ impl Sequence {
 		self.queue.push(vec![ForkElement::Interval { total_time: time, elapsed_time: 0. }]);
 	}
 	
+	pub fn append_many_in_parallel(&mut self, tweens: impl IntoIterator<Item: Into<AnyTween>>) {
+		let mut added_first = false;
+		
+		for tween in tweens {
+			let tween = tween.into();
+			
+			if added_first {
+				self.join(tween);
+			} else {
+				self.append(tween);
+				added_first = true;
+			}
+		}
+	}
+	
 	pub fn join(&mut self, any_tween: impl Into<AnyTween>) {
 		let mut tween = any_tween.into();
 
@@ -226,6 +241,12 @@ impl Sequence {
 			back.push(ForkElement::Callback { invoked: false, callback });
 		} else {
 			self.queue.push(vec![ForkElement::Callback { invoked: false, callback }]);
+		}
+	}
+	
+	pub fn join_many(&mut self, tweens: impl IntoIterator<Item: Into<AnyTween>>) {
+		for tween in tweens {
+			self.join(tween.into());
 		}
 	}
 	
