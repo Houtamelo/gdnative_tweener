@@ -492,7 +492,7 @@ impl Sequence {
 		while let Some(fork) = queue_iter.next() && remaining_delta > 0. {
 			remaining_delta =
 				fork.iter_mut()
-				    .filter_map(|fork_element| {
+				    .map(|fork_element| {
 					    match fork_element {
 						    ForkElement::Tween(tween) => {
 							    match tween.state() {
@@ -533,7 +533,9 @@ impl Sequence {
 							    (above_total > 0.).then_some(above_total)							    
 						    }
 					    }
-				    }).min_by(f64::total_cmp).unwrap_or(-1.);
+				    }).fold(None, |cur_min, time| {
+						Some(f64::min(cur_min?, time?))
+					}).unwrap_or(-1.);
 		}
 		
 		if remaining_delta > 0. {
