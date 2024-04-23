@@ -37,10 +37,8 @@ impl<T: Tick + FromTween> TweenID<T> {
 	}
 
 	pub fn kill(&self) -> Result<()> {
-		let id =
-			Weak::upgrade(&self.0.0)
-				.ok_or_else(|| anyhow!(
-					"Tween with id `{}` no longer exists.", self))?;
+		let Some(id) = Weak::upgrade(&self.0.0)
+			else { return Ok(()) };
 		
 		let brain =
 			&mut TweensController::singleton().try_borrow_mut()?;
@@ -50,10 +48,8 @@ impl<T: Tick + FromTween> TweenID<T> {
 	}
 
 	pub fn complete(&self) -> Result<()> {
-		let id =
-			Weak::upgrade(&self.0.0)
-				.ok_or_else(|| anyhow!(
-					"Tween with id `{}` no longer exists.", self))?;
+		let Some(id) = Weak::upgrade(&self.0.0)
+			else { return Ok(()) };
 		
 		let brain =
 			&mut TweensController::singleton().try_borrow_mut()?;

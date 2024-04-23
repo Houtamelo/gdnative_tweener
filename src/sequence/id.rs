@@ -15,16 +15,15 @@ impl SequenceID {
 				let weak = self.0.clone();
 				weak.0.upgrade()
 				    .is_some_and(|id| {
-					    brain.get_sequence(ID(id)).is_some()
+					    brain.get_sequence(ID(id))
+						     .is_some()
 				    })
 			})
 	}
 
 	pub fn kill(&self) -> Result<()> {
-		let id =
-			Weak::upgrade(&self.0.0)
-				.ok_or_else(|| anyhow!(
-					"Sequence with id `{}` no longer exists.", self))?;
+		let Some(id) = Weak::upgrade(&self.0.0)
+			else { return Ok(()) };
 
 		let brain =
 			&mut TweensController::singleton().try_borrow_mut()?;
@@ -34,10 +33,8 @@ impl SequenceID {
 	}
 
 	pub fn complete(&self) -> Result<()> {
-		let id =
-			Weak::upgrade(&self.0.0)
-				.ok_or_else(|| anyhow!(
-					"Sequence with id `{}` no longer exists.", self))?;
+		let Some(id) = Weak::upgrade(&self.0.0)
+			else { return Ok(()) };
 
 		let brain =
 			&mut TweensController::singleton().try_borrow_mut()?;
