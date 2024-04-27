@@ -260,15 +260,17 @@ macro_rules! property_impl {
 						}
 					};
 			    
-			    unsafe { 
-					target.call_deferred("set_indexed", &[self.property.to_variant(), target_value.to_variant()]);
-				}
+			    target.set_indexed(self.property.new_ref(), target_value.to_variant());
 			    
 			    self.on_finish();
 		    }
 			
 			fn advance_time_internal(&mut self, delta_time: f64) -> Result<Option<f64>> {
 			    self.elapsed_time += delta_time * self.speed_scale;
+			    
+			    if self.elapsed_time < self.delay {
+				    return Ok(None);
+			    }
 			    
 				let Some(target) = (unsafe { self.target.assume_safe_if_sane() }) 
 					else {
@@ -353,9 +355,7 @@ macro_rules! property_impl {
 						}
 					};
 				
-				unsafe { 
-					target.call_deferred("set_indexed", &[self.property.to_variant(), target_value.to_variant()]);
-				}
+			    target.set_indexed(self.property.new_ref(), target_value.to_variant());
 				
 				let final_excess_time = 
 					match excess_time {

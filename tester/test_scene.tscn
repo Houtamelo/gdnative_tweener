@@ -47,3 +47,10 @@ margin_top = 69.25
 margin_right = 68.0
 margin_bottom = 89.25
 text = "speed_based"
+
+[node name="delay" type="Button" parent="test_buttons"]
+margin_left = -27.0
+margin_top = 99.0
+margin_right = 19.0
+margin_bottom = 119.0
+text = "delay"

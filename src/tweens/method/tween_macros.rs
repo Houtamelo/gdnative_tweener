@@ -134,12 +134,16 @@ macro_rules! method_impl {
 				        return godot_error!("Cannot call method `{}`, target is not sane", self.method)
 			        };
 			    
-			    unsafe { target.call_deferred(self.method.new_ref(), &[target_value.to_variant()]) };
+			    unsafe { target.call(self.method.new_ref(), &[target_value.to_variant()]) };
 			    self.on_finish();
 		    }
 		    
 		    fn advance_time_internal(&mut self, delta_time: f64) -> Result<Option<f64>> {
 			    self.elapsed_time += delta_time * self.speed_scale;
+			    
+			    if self.elapsed_time < self.delay {
+				    return Ok(None);
+			    }
 			    
 				let target_value = {
 					let eased_ratio = { 
@@ -160,7 +164,7 @@ macro_rules! method_impl {
 				    self.target
 				        .assume_safe_if_sane()
 				        .ok_or_else(|| anyhow!("Cannot call method `{}`, target is not sane", self.method))?
-				        .call_deferred(self.method.new_ref(), &[target_value.to_variant()]);
+				        .call(self.method.new_ref(), &[target_value.to_variant()]);
 			    }
 			    
 			    let final_excess_time = 

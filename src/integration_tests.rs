@@ -62,8 +62,9 @@ impl Report {
 	}
 }
 
+#[derive(Copy, Clone)]
 enum State {
-	Running { test: Test, last_time: Option<f64> },
+	Running { test: Test },
 	PrintingReports,
 	Finished,
 }
@@ -86,6 +87,7 @@ enum Test {
 	Absolute,
 	SpeedBased,
 	Relative,
+	Delay,
 }
 
 impl Test {
@@ -187,7 +189,7 @@ impl Test {
 						}
 						..=D_1 => {
 							f64::_lerp(&0., &-1000., time / D_1)
-								+ f64::_lerp(&0., &1500., (time - 2.0) / D_1)
+						  + f64::_lerp(&0., &1500., (time - 2.0) / D_1)
 						}
 						..=const { D_1 + 2.0 } => {
 							-1000. + f64::_lerp(&0., &1500., (time - 2.0) / D_1)
@@ -201,6 +203,47 @@ impl Test {
 							f64::_lerp(&0., &1., time / D_2)
 						}
 						_ => 1.
+					};
+				
+				Report::generate(owner, time, expected_x, expected_y, expected_color_r)
+					.map(|report| tester.reports.push(report));
+			}
+			Test::Delay => {
+				let expected_x = 
+					match time {
+						..=3. => 0.,
+						..=const { D_1 + 3. } => {
+							f64::_lerp(&0., &1000., (time - 3.) / D_1)
+						}
+						..=const { D_1 + 8. } => 1000.,
+						..=const { D_2 + 8. } => {
+							f64::_lerp(&1000., &-500., (time - D_1 - 8.) / D_1)
+						}
+						_ => -500.
+					};
+				
+				let expected_y = 
+					match time {
+						..=3. => 0.,
+						..=const { D_1 + 3. } => {
+							f64::_lerp(&0., &-1000., (time - 3.) / D_1)
+						}
+						..=const { D_15 + 3. } => {
+							-1000.
+						}
+						..=const { D_2 + 3. } => {
+							f64::_lerp(&-1000., &0., (time - D_15 - 3.) / (D_2 - D_15))
+						}
+						_ => 0.
+					};
+				
+				let expected_color_r =
+					match time {
+						..=0.5 => 0.,
+						..=const { D_2 + 0.5 } => {
+							f64::_lerp(&0., &0.5, (time - 0.5) / D_2)
+						}
+						_ => 0.5
 					};
 				
 				Report::generate(owner, time, expected_x, expected_y, expected_color_r)
@@ -246,9 +289,23 @@ impl Test {
 
 				let mut seq = Sequence::new().bound_to(owner);
 				seq.append(owner.do_move_x(1000.0, D_1));
-				seq.join(owner.do_move_y(-1000.0, D_1));
+				seq.join(owner.do_move_y(-1000.0, D_1).as_relative(0.));
 				seq.append(owner.do_move_x(-500.0, D_1).as_relative(0.));
 				seq.insert(2.0, owner.do_move_y(1500., D_1).as_relative(0.));
+				seq.register()
+				   .unwrap()
+			}
+			Test::Delay => {
+				owner.do_color_r(0.5, D_2)
+					 .with_delay(0.5)
+				     .register()
+				     .unwrap();
+
+				let mut seq = Sequence::new().bound_to(owner).with_delay(3.0);
+				seq.append(owner.do_move_x(1000.0, D_1));
+				seq.join(owner.do_move_y(-1000.0, D_1));
+				seq.append(owner.do_move_x(-500.0, D_1).with_delay(5.0));
+				seq.insert(D_15, owner.do_move_y(0., D_1).with_speed_scale(2.));
 				seq.register()
 				   .unwrap()
 			}
@@ -289,6 +346,11 @@ impl Tester {
 		       .unwrap()
 		       .connect("pressed", owner_ref, fn_name(&Self::_start_test), Test::Relative.to_shared_array(), 0)
 		       .log_if_err();
+		
+		buttons.get_node_as::<Button>("delay")
+		       .unwrap()
+		       .connect("pressed", owner_ref, fn_name(&Self::_start_test), Test::Delay.to_shared_array(), 0)
+		       .log_if_err();
 	}
 	
 	fn reset(&mut self, owner: &Node2D) {
@@ -303,23 +365,20 @@ impl Tester {
 	#[method]
 	fn _start_test(&mut self, #[base] owner: &Node2D, test: Test) {
 		self.reset(owner);
-		self.state = State::Running { test, last_time: None };
+		self.state = State::Running { test };
 		self.sequence = Some(test.start(owner));
 	}
 	
 	#[method]
 	fn _process(&mut self, #[base] owner: &Node2D, _delta: f64) {
 		match &mut self.state {
-			State::Running { test, last_time } => {
-				if let Some(time) = last_time.take() {
-					let test = *test;
-					test.report(self, owner, time);
-				} else if let Some(time) =
+			State::Running { test } => {
+				if let Some(time) =
 					self.sequence.as_ref()
 						.map(|id| { 
 							id.map(|seq| seq.total_elapsed_time).ok() 
 						}).flatten() {
-					*last_time = Some(time);
+					test.clone().report(self, owner, time);
 				} else {
 					godot_print!("Sequence ended, printing reports!");
 					self.state = State::PrintingReports;

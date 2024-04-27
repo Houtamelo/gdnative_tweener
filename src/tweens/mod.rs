@@ -59,7 +59,7 @@ impl GodotMethodCall {
 				.assume_safe_if_sane()
 				.ok_or_else(|| anyhow!("Target is not sane."))?;
 
-		target.call_deferred(self.method.new_ref(), &self.args);
+		target.call(self.method.new_ref(), &self.args);
 		Ok(())
 	}
 }

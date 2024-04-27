@@ -442,8 +442,22 @@ impl Sequence {
 	}
 
 	pub fn advance_time(&mut self, delta_time: f64) -> Option<f64> {
-		let delta_time = delta_time * self.speed_scale;
+		let raw_delta_time = delta_time * self.speed_scale;
+		let old_elapsed = self.total_elapsed_time;
 		self.total_elapsed_time += delta_time;
+
+		if self.total_elapsed_time < self.delay {
+			return None;
+		}
+
+		let total_after_delay = self.total_elapsed_time - self.delay;
+		
+		let delta_time =
+			if old_elapsed > self.delay {
+				raw_delta_time
+			} else {
+				total_after_delay
+			};
 		
 		for (at, inserted_element) in self.inserteds.iter_mut() {
 			match inserted_element {
@@ -453,8 +467,8 @@ impl Sequence {
 							tween.advance_time(delta_time);
 						}
 						State::Paused => {
-							if *at <= self.total_elapsed_time {
-								let above_at = self.total_elapsed_time - *at;
+							if *at <= total_after_delay {
+								let above_at = total_after_delay - *at;
 								tween.play();
 								tween.advance_time(above_at);
 							}
@@ -468,8 +482,8 @@ impl Sequence {
 							seq.advance_time(delta_time);
 						}
 						State::Paused => {
-							if *at <= self.total_elapsed_time {
-								let above_at = self.total_elapsed_time - *at;
+							if *at <= total_after_delay {
+								let above_at = total_after_delay - *at;
 								seq.play();
 								seq.advance_time(above_at);
 							}
@@ -478,7 +492,7 @@ impl Sequence {
 					}
 				}
 				InsertedElement::Callback { invoked, callback } => {
-					if *invoked == false && *at >= self.total_elapsed_time {
+					if *invoked == false && *at >= total_after_delay {
 						*invoked = true;
 						unsafe { callback.invoke().log_if_err() };
 					}
@@ -533,7 +547,7 @@ impl Sequence {
 							    (above_total > 0.).then_some(above_total)							    
 						    }
 					    }
-				    }).fold(None, |cur_min, time| {
+				    }).fold(Some(remaining_delta), |cur_min, time| {
 						Some(f64::min(cur_min?, time?))
 					}).unwrap_or(-1.);
 		}
