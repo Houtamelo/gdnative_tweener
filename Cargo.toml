@@ -1,6 +1,6 @@
 [package]
 name = "gdnative_tweener"
-version = "0.5.8"
+version = "0.5.9"
 authors = ["Houtamelo"]
 edition = "2021"
 description = "A port of DoTween(3rd party package for Unity) to Godot 3.5, using GdNative."
@@ -17,15 +17,15 @@ gdnative = "0.11"
 gdnative_export_node_as_path = "0.1"
 util = { package = "houtamelo_utils", version = "2.0" }
 util_gdnative = { package = "houtamelo_utils_gdnative", version = "2.0" }
-anyhow = "1.0"
+anyhow = "1.0.86"
 lazy_static = "1.4"
-keyframe = "1.1"
-keyframe_derive = "1.0"
-rand = { version = "0.8", features = ["std", "std_rng", "getrandom"] }
-rand_xoshiro = "0.6"
-downcast-rs = "1.2"
-inline_format = "0.2"
-enum_dispatch = "0.3"
+keyframe = "1.1.1"
+keyframe_derive = "1.0.0"
+rand = { version = "0.8.5", features = ["std", "std_rng", "getrandom"] }
+rand_xoshiro = "0.6.0"
+downcast-rs = "1.2.1"
+inline_format = "0.2.3"
+enum_dispatch = "0.3.13"
 
 [features]
 default = []

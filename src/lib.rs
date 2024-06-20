@@ -6,7 +6,7 @@
 #![feature(negative_impls)]
 #![feature(auto_traits)]
 #![feature(inline_const_pat)]
-#![feature(inline_const)]
+#![feature(is_none_or)]
 #![allow(non_camel_case_types)]
 
 mod property;
